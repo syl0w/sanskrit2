@@ -1,0 +1,1589 @@
+/* ============================================================
+   MANTRA: THE RESONANT WORLD — Stylesheet
+   Dark fantasy aesthetic with glowing runes and smooth animations
+   ============================================================ */
+
+/* === CUSTOM PROPERTIES === */
+:root {
+  --bg-primary: #06060f;
+  --bg-secondary: #0d0d1a;
+  --bg-card: rgba(14, 14, 30, 0.92);
+  --bg-card-hover: rgba(20, 20, 45, 0.95);
+
+  --gold: #ffd700;
+  --gold-dim: #b8960f;
+  --gold-glow: rgba(255, 215, 0, 0.4);
+  --blue: #4fc3f7;
+  --blue-dim: #2196f3;
+  --blue-glow: rgba(79, 195, 247, 0.3);
+  --jade: #66bb6a;
+  --jade-dim: #43a047;
+  --jade-glow: rgba(102, 187, 106, 0.3);
+  --purple: #bb86fc;
+  --purple-dim: #9c64fb;
+  --purple-glow: rgba(187, 134, 252, 0.3);
+  --red: #ef5350;
+  --red-glow: rgba(239, 83, 80, 0.3);
+  --amber: #ffab40;
+
+  --text-primary: #e8e6e3;
+  --text-secondary: #9e9e9e;
+  --text-dim: #616161;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-gold: rgba(255, 215, 0, 0.25);
+
+  --font-title: 'Cinzel Decorative', 'Cinzel', serif;
+  --font-heading: 'Cinzel', serif;
+  --font-body: 'Crimson Text', Georgia, serif;
+  --font-ui: 'Inter', -apple-system, sans-serif;
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.6s ease;
+}
+
+/* === RESET & BASE === */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* === PARTICLE CANVAS === */
+#particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* === GAME CONTAINER === */
+#game {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  z-index: 1;
+  overflow: hidden;
+}
+
+/* === SCENES === */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-slow);
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.scene.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* === TITLE SCREEN === */
+.title-content {
+  text-align: center;
+  max-width: 700px;
+  animation: fadeInUp 1.2s ease;
+}
+
+.title-sanskrit {
+  font-size: clamp(3rem, 8vw, 6rem);
+  color: var(--gold);
+  text-shadow:
+    0 0 30px var(--gold-glow),
+    0 0 60px rgba(255, 215, 0, 0.2);
+  letter-spacing: 0.3em;
+  margin-bottom: 0.2em;
+  animation: glow 3s ease-in-out infinite alternate;
+}
+
+.title-main {
+  font-family: var(--font-title);
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  color: var(--text-primary);
+  margin-bottom: 0.1em;
+}
+
+.title-sub {
+  font-family: var(--font-heading);
+  font-size: clamp(1rem, 2.5vw, 1.5rem);
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  margin-bottom: 1.5em;
+}
+
+.title-tagline {
+  font-style: italic;
+  color: var(--gold-dim);
+  font-size: 1.1rem;
+  margin-bottom: 1em;
+}
+
+.title-divider {
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  margin: 1.5em auto;
+}
+
+.title-hook {
+  color: var(--text-secondary);
+  font-size: 1.15rem;
+  margin-bottom: 2em;
+}
+
+.title-hint {
+  margin-top: 1.5em;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+/* === BUTTONS === */
+.btn {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.7em 1.8em;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-icon {
+  font-size: 1.1em;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), #f0c040);
+  color: #1a1a00;
+  box-shadow: 0 4px 20px var(--gold-glow);
+}
+
+.btn-gold:hover {
+  box-shadow: 0 6px 30px rgba(255, 215, 0, 0.6);
+  transform: translateY(-1px);
+}
+
+.btn-blue {
+  background: linear-gradient(135deg, var(--blue), var(--blue-dim));
+  color: #fff;
+  box-shadow: 0 4px 20px var(--blue-glow);
+}
+
+.btn-blue:hover {
+  box-shadow: 0 6px 30px rgba(79, 195, 247, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-jade {
+  background: linear-gradient(135deg, var(--jade), var(--jade-dim));
+  color: #fff;
+  box-shadow: 0 4px 20px var(--jade-glow);
+}
+
+.btn-jade:hover {
+  box-shadow: 0 6px 30px rgba(102, 187, 106, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-purple {
+  background: linear-gradient(135deg, var(--purple), var(--purple-dim));
+  color: #fff;
+  box-shadow: 0 4px 20px var(--purple-glow);
+}
+
+.btn-purple:hover {
+  box-shadow: 0 6px 30px rgba(187, 134, 252, 0.5);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-ghost:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.btn-large {
+  font-size: 1.1rem;
+  padding: 0.9em 2.5em;
+}
+
+.btn-small {
+  font-size: 0.8rem;
+  padding: 0.4em 1em;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* === INTRO SCREEN === */
+.intro-container {
+  max-width: 700px;
+  width: 100%;
+  text-align: center;
+}
+
+.intro-progress {
+  width: 100%;
+  height: 3px;
+  background: var(--border-subtle);
+  border-radius: 2px;
+  margin-bottom: 3em;
+  overflow: hidden;
+}
+
+.intro-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--amber));
+  border-radius: 2px;
+  transition: width var(--transition-normal);
+}
+
+.intro-slide {
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  animation: fadeIn 0.5s ease;
+}
+
+.intro-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  color: var(--gold);
+  margin-bottom: 1em;
+  letter-spacing: 0.05em;
+}
+
+.intro-text {
+  font-size: 1.2rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+.intro-controls {
+  margin-top: 3em;
+  display: flex;
+  justify-content: center;
+  gap: 1em;
+}
+
+/* === TEXT COLORS === */
+.text-gold { color: var(--gold); font-weight: 600; }
+.text-blue { color: var(--blue); font-weight: 600; }
+.text-jade { color: var(--jade); font-weight: 600; }
+.text-purple { color: var(--purple); font-weight: 600; }
+.text-red { color: var(--red); font-weight: 600; }
+
+/* === WORLD MAP === */
+.map-header {
+  text-align: center;
+  margin-bottom: 2em;
+}
+
+.map-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  margin-bottom: 1em;
+}
+
+.map-stats {
+  display: flex;
+  justify-content: center;
+  gap: 2em;
+  flex-wrap: wrap;
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  color: var(--gold);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+#scene-map {
+  flex-direction: column;
+  padding: 2em;
+}
+
+.map-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.2em;
+  max-width: 1000px;
+  width: 100%;
+}
+
+.map-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.5em;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.map-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  padding: 1px;
+  background: linear-gradient(135deg, transparent, rgba(255, 215, 0, 0.1), transparent);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.map-card:hover::before {
+  opacity: 1;
+}
+
+.map-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-gold);
+  box-shadow: 0 8px 40px rgba(255, 215, 0, 0.1);
+}
+
+.map-card.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+.map-card.locked:hover {
+  transform: none;
+  border-color: var(--border-subtle);
+  box-shadow: none;
+}
+
+.map-card.completed {
+  border-color: rgba(102, 187, 106, 0.3);
+}
+
+.map-card.completed::after {
+  content: '✓';
+  position: absolute;
+  top: 1em;
+  right: 1em;
+  color: var(--jade);
+  font-size: 1.2em;
+  font-weight: 700;
+}
+
+.map-card-icon {
+  font-size: 2.5em;
+  margin-bottom: 0.3em;
+}
+
+.map-card-name {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  color: var(--text-primary);
+  margin-bottom: 0.2em;
+}
+
+.map-card-subtitle {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--gold-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.8em;
+}
+
+.map-card-desc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.map-card-locked-label {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 0.8em;
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.map-footer {
+  margin-top: 2em;
+  display: flex;
+  gap: 1em;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* === LOCATION / PUZZLE SCENES === */
+.location-container {
+  max-width: 800px;
+  width: 100%;
+  padding: 1em;
+}
+
+.location-header {
+  text-align: center;
+  margin-bottom: 2em;
+}
+
+.location-back {
+  margin-bottom: 1em;
+}
+
+.location-name {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
+.location-subtitle {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--gold-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-top: 0.3em;
+}
+
+.location-intro {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 2em;
+  margin-bottom: 2em;
+  font-size: 1.1rem;
+  line-height: 1.8;
+  text-align: center;
+}
+
+.location-intro .scene-title {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  color: var(--gold);
+  margin-bottom: 1em;
+}
+
+/* === PUZZLE: TRINITY CHAIN === */
+.puzzle-phase {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 2em;
+  margin-bottom: 1.5em;
+  animation: fadeInUp 0.5s ease;
+}
+
+.puzzle-prompt {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  margin-bottom: 1.5em;
+  text-align: center;
+}
+
+.puzzle-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8em;
+  margin-bottom: 1em;
+}
+
+.puzzle-option {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1em 1.5em;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.puzzle-option:hover {
+  border-color: var(--gold);
+  background: rgba(255, 215, 0, 0.05);
+  transform: translateY(-2px);
+}
+
+.puzzle-option.correct {
+  border-color: var(--jade);
+  background: rgba(102, 187, 106, 0.1);
+  color: var(--jade);
+  animation: correctPulse 0.5s ease;
+}
+
+.puzzle-option.wrong {
+  border-color: var(--red);
+  background: rgba(239, 83, 80, 0.1);
+  color: var(--red);
+  animation: shake 0.4s ease;
+}
+
+.puzzle-option.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Word chain visualization */
+.word-chain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.5em;
+  margin: 1.5em 0;
+  animation: fadeInUp 0.6s ease;
+}
+
+.chain-word {
+  padding: 0.5em 1em;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.chain-word.sanskrit { background: rgba(255, 215, 0, 0.15); color: var(--gold); border: 1px solid var(--gold-glow); }
+.chain-word.chinese { background: rgba(102, 187, 106, 0.15); color: var(--jade); border: 1px solid var(--jade-glow); }
+.chain-word.english { background: rgba(79, 195, 247, 0.15); color: var(--blue); border: 1px solid var(--blue-glow); }
+.chain-word.japanese { background: rgba(187, 134, 252, 0.15); color: var(--purple); border: 1px solid var(--purple-glow); }
+
+.chain-arrow {
+  color: var(--text-dim);
+  font-size: 1.2em;
+}
+
+.puzzle-revelation {
+  background: rgba(255, 215, 0, 0.05);
+  border-left: 3px solid var(--gold);
+  padding: 1em 1.5em;
+  margin-top: 1em;
+  border-radius: 0 8px 8px 0;
+  font-size: 1rem;
+  line-height: 1.7;
+  animation: fadeIn 0.6s ease;
+}
+
+/* === PUZZLE: TRINITY MATCH === */
+.match-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1em;
+  margin-bottom: 1.5em;
+}
+
+.match-column-header {
+  text-align: center;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding-bottom: 0.8em;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 0.8em;
+}
+
+.match-column-header.sanskrit-col { color: var(--gold); }
+.match-column-header.english-col { color: var(--blue); }
+.match-column-header.chinese-col { color: var(--jade); }
+
+.match-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1rem;
+  text-align: center;
+  user-select: none;
+}
+
+.match-item:hover {
+  transform: translateY(-2px);
+}
+
+.match-item.selected {
+  border-color: var(--gold);
+  background: rgba(255, 215, 0, 0.08);
+  box-shadow: 0 0 15px var(--gold-glow);
+}
+
+.match-item.matched {
+  border-color: var(--jade);
+  background: rgba(102, 187, 106, 0.1);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.match-item.sanskrit-item { color: var(--gold); }
+.match-item.english-item { color: var(--blue); }
+.match-item.chinese-item { color: var(--jade); }
+
+.match-hint {
+  text-align: center;
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  margin-top: 0.5em;
+  min-height: 1.5em;
+}
+
+/* === PUZZLE: SPEED MATCH === */
+.speed-timer {
+  text-align: center;
+  margin-bottom: 1.5em;
+}
+
+.speed-timer-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--border-subtle);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.5em;
+}
+
+.speed-timer-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--amber), var(--jade));
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.speed-timer-text {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.speed-pair {
+  text-align: center;
+  margin-bottom: 1.5em;
+  animation: fadeInUp 0.3s ease;
+}
+
+.speed-english {
+  font-size: 2rem;
+  font-family: var(--font-heading);
+  color: var(--blue);
+  margin-bottom: 0.5em;
+}
+
+.speed-hint {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 1em;
+}
+
+.speed-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8em;
+}
+
+.speed-score {
+  text-align: center;
+  font-family: var(--font-ui);
+  margin-top: 1em;
+}
+
+.speed-score-value {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+/* === PUZZLE: SCROLL TRANSLATE === */
+.scroll-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.5em;
+  margin-bottom: 1em;
+  transition: all var(--transition-normal);
+}
+
+.scroll-card.revealed {
+  border-color: var(--gold-glow);
+}
+
+.scroll-sanskrit {
+  font-size: 1.5rem;
+  color: var(--gold);
+  font-weight: 600;
+  margin-bottom: 0.3em;
+}
+
+.scroll-meaning {
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-bottom: 1em;
+}
+
+.scroll-translations {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8em;
+  margin-bottom: 0.8em;
+}
+
+.scroll-translation {
+  padding: 0.6em 1em;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.scroll-translation.chinese {
+  background: rgba(102, 187, 106, 0.1);
+  border: 1px solid rgba(102, 187, 106, 0.2);
+  color: var(--jade);
+}
+
+.scroll-translation.english {
+  background: rgba(79, 195, 247, 0.1);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  color: var(--blue);
+}
+
+.scroll-type {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  padding: 0.5em 0.8em;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  display: none;
+}
+
+.scroll-card.revealed .scroll-type {
+  display: block;
+  animation: fadeIn 0.5s ease;
+}
+
+.scroll-reveal-btn {
+  margin-top: 0.5em;
+}
+
+/* === LEXICON === */
+.lexicon-container {
+  max-width: 1000px;
+  width: 100%;
+}
+
+#scene-lexicon {
+  align-items: flex-start;
+  padding: 2em;
+}
+
+.lexicon-header {
+  margin-bottom: 2em;
+}
+
+.lexicon-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  color: var(--gold);
+  text-align: center;
+  margin: 0.5em 0;
+}
+
+.lexicon-tabs {
+  display: flex;
+  gap: 0.5em;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1em;
+}
+
+.tab {
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  padding: 0.5em 1.2em;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tab:hover {
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
+
+.tab.active {
+  background: rgba(255, 215, 0, 0.1);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.lexicon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1em;
+}
+
+.lexicon-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 1.2em;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.lexicon-card:hover {
+  border-color: var(--border-gold);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(255, 215, 0, 0.08);
+}
+
+.lexicon-card-sanskrit {
+  font-size: 1.3rem;
+  color: var(--gold);
+  font-weight: 600;
+  margin-bottom: 0.3em;
+}
+
+.lexicon-card-meaning {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.8em;
+}
+
+.lexicon-card-connections {
+  display: flex;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.lexicon-tag {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  padding: 0.25em 0.6em;
+  border-radius: 4px;
+}
+
+.lexicon-tag.english {
+  background: rgba(79, 195, 247, 0.1);
+  color: var(--blue);
+}
+
+.lexicon-tag.chinese {
+  background: rgba(102, 187, 106, 0.1);
+  color: var(--jade);
+}
+
+.lexicon-tag.category {
+  background: rgba(187, 134, 252, 0.1);
+  color: var(--purple);
+}
+
+.lexicon-empty {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 1.1rem;
+  padding: 3em;
+}
+
+/* === WORD DETAIL MODAL === */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-gold);
+  border-radius: 16px;
+  padding: 2.5em;
+  max-width: 550px;
+  width: 90%;
+  max-height: 85vh;
+  overflow-y: auto;
+  animation: fadeInUp 0.3s ease;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-close {
+  position: absolute;
+  top: 1em;
+  right: 1em;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0.3em;
+  transition: color var(--transition-fast);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.word-detail-sanskrit {
+  font-size: 2rem;
+  color: var(--gold);
+  text-shadow: 0 0 20px var(--gold-glow);
+  margin-bottom: 0.1em;
+}
+
+.word-detail-meaning {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5em;
+}
+
+/* Trinity Triangle */
+.trinity {
+  position: relative;
+  padding: 2em;
+  margin: 1.5em 0;
+}
+
+.trinity-center {
+  text-align: center;
+  margin-bottom: 1em;
+}
+
+.trinity-center-label {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin-bottom: 0.3em;
+}
+
+.trinity-center-word {
+  font-size: 1.8rem;
+  color: var(--gold);
+  font-weight: 700;
+  text-shadow: 0 0 15px var(--gold-glow);
+}
+
+.trinity-branches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1em;
+  margin-top: 1em;
+}
+
+.trinity-branch {
+  padding: 1em;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.trinity-branch.english {
+  background: rgba(79, 195, 247, 0.08);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+}
+
+.trinity-branch.chinese {
+  background: rgba(102, 187, 106, 0.08);
+  border: 1px solid rgba(102, 187, 106, 0.2);
+}
+
+.trinity-branch-label {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.3em;
+}
+
+.trinity-branch.english .trinity-branch-label { color: var(--blue); }
+.trinity-branch.chinese .trinity-branch-label { color: var(--jade); }
+
+.trinity-branch-word {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.trinity-branch.english .trinity-branch-word { color: var(--blue); }
+.trinity-branch.chinese .trinity-branch-word { color: var(--jade); }
+
+.word-detail-lore {
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-top: 1.5em;
+  padding: 1em;
+  background: rgba(255, 215, 0, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid var(--gold-dim);
+  line-height: 1.7;
+}
+
+.word-detail-category {
+  margin-top: 1em;
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* === SPELL FORGE === */
+#scene-forge {
+  align-items: flex-start;
+  padding: 2em;
+}
+
+.forge-container {
+  max-width: 1000px;
+  width: 100%;
+}
+
+.forge-header {
+  text-align: center;
+  margin-bottom: 2em;
+}
+
+.forge-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  color: var(--gold);
+  margin: 0.5em 0 0.2em;
+}
+
+.forge-subtitle {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.forge-layout {
+  display: grid;
+  grid-template-columns: 250px 1fr 250px;
+  gap: 1.5em;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .forge-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.forge-roots {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.forge-root-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.6em 1em;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.forge-root-btn:hover {
+  border-color: var(--gold-dim);
+  transform: translateX(4px);
+}
+
+.forge-root-btn.selected {
+  border-color: var(--gold);
+  background: rgba(255, 215, 0, 0.08);
+}
+
+.forge-root-icon {
+  font-size: 1.2em;
+}
+
+.forge-root-name {
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.forge-root-meaning {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.forge-root-type {
+  font-size: 0.65rem;
+  padding: 0.2em 0.5em;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-left: auto;
+}
+
+.forge-root-type.element { background: rgba(239, 83, 80, 0.15); color: var(--red); }
+.forge-root-type.modifier { background: rgba(255, 215, 0, 0.15); color: var(--gold); }
+.forge-root-type.suffix { background: rgba(187, 134, 252, 0.15); color: var(--purple); }
+
+.forge-crafting {
+  text-align: center;
+}
+
+.forge-slots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8em;
+  margin-bottom: 1.5em;
+}
+
+.forge-slot {
+  width: 130px;
+  height: 100px;
+  background: var(--bg-card);
+  border: 2px dashed var(--border-subtle);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  position: relative;
+}
+
+.forge-slot.filled {
+  border-style: solid;
+  border-color: var(--gold-dim);
+  background: rgba(255, 215, 0, 0.05);
+}
+
+.forge-slot .slot-label {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.forge-slot .slot-content {
+  text-align: center;
+}
+
+.forge-slot .slot-icon {
+  font-size: 1.5em;
+}
+
+.forge-slot .slot-name {
+  font-size: 0.85rem;
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.forge-plus {
+  font-size: 1.5rem;
+  color: var(--text-dim);
+}
+
+.forge-result {
+  margin-top: 1.5em;
+  padding: 1.5em;
+  background: var(--bg-card);
+  border: 1px solid var(--gold-glow);
+  border-radius: 12px;
+  animation: fadeInUp 0.5s ease;
+}
+
+.forge-result-name {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  color: var(--gold);
+  margin-bottom: 0.3em;
+}
+
+.forge-result-desc {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin-bottom: 1em;
+}
+
+.forge-result-power {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--amber);
+}
+
+.power-bar {
+  display: flex;
+  gap: 3px;
+  justify-content: center;
+  margin-top: 0.5em;
+}
+
+.power-pip {
+  width: 20px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-subtle);
+}
+
+.power-pip.filled {
+  background: linear-gradient(90deg, var(--gold), var(--amber));
+  box-shadow: 0 0 8px var(--gold-glow);
+}
+
+.forge-spellbook {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 1.2em;
+}
+
+.forge-spellbook h3 {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  color: var(--gold);
+  margin-bottom: 1em;
+  text-align: center;
+}
+
+.spellbook-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.spellbook-entry {
+  padding: 0.6em;
+  background: rgba(255, 215, 0, 0.03);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+}
+
+.spellbook-entry-name {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.spellbook-entry-power {
+  color: var(--amber);
+  font-size: 0.75rem;
+}
+
+.empty-text {
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  text-align: center;
+  font-style: italic;
+}
+
+/* === SCENE COMPLETION === */
+.scene-complete {
+  text-align: center;
+  padding: 2em;
+  animation: fadeInUp 0.6s ease;
+}
+
+.scene-complete-icon {
+  font-size: 4em;
+  margin-bottom: 0.3em;
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+.scene-complete-title {
+  font-family: var(--font-heading);
+  font-size: 1.8rem;
+  color: var(--gold);
+  margin-bottom: 0.5em;
+}
+
+.scene-complete-words {
+  display: flex;
+  gap: 0.5em;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 1em 0;
+}
+
+.scene-complete-word {
+  padding: 0.4em 0.8em;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid var(--gold-glow);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 0.9rem;
+}
+
+/* === TOAST NOTIFICATIONS === */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.toast {
+  padding: 0.8em 1.5em;
+  background: var(--bg-card);
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+}
+
+.toast-icon {
+  font-size: 1.2em;
+}
+
+/* === ANIMATIONS === */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(50px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes glow {
+  from { text-shadow: 0 0 20px var(--gold-glow); }
+  to { text-shadow: 0 0 40px var(--gold-glow), 0 0 60px rgba(255, 215, 0, 0.15); }
+}
+
+@keyframes correctPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+@keyframes spellCast {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* === SCROLLBAR === */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  html { font-size: 16px; }
+
+  .title-sanskrit { font-size: 3rem; }
+  .title-main { font-size: 2.5rem; }
+
+  .map-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .puzzle-options {
+    grid-template-columns: 1fr;
+  }
+
+  .match-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .forge-slots {
+    flex-wrap: wrap;
+  }
+
+  .forge-slot {
+    width: 100px;
+    height: 80px;
+  }
+
+  .trinity-branches {
+    grid-template-columns: 1fr;
+  }
+
+  .lexicon-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === SPELL EFFECT OVERLAY === */
+.spell-effect {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 500;
+  animation: spellFlash 1s ease forwards;
+}
+
+@keyframes spellFlash {
+  0% { background: rgba(255, 215, 0, 0.3); }
+  100% { background: transparent; }
+}
+
+.spell-effect.fire { animation-name: spellFireFlash; }
+@keyframes spellFireFlash {
+  0% { background: rgba(255, 107, 53, 0.3); }
+  100% { background: transparent; }
+}
+
+.spell-effect.water { animation-name: spellWaterFlash; }
+@keyframes spellWaterFlash {
+  0% { background: rgba(79, 195, 247, 0.3); }
+  100% { background: transparent; }
+}
+
+.spell-effect.wind { animation-name: spellWindFlash; }
+@keyframes spellWindFlash {
+  0% { background: rgba(176, 190, 197, 0.3); }
+  100% { background: transparent; }
+}
+
+.spell-effect.lightning { animation-name: spellLightningFlash; }
+@keyframes spellLightningFlash {
+  0% { background: rgba(255, 235, 59, 0.4); }
+  50% { background: transparent; }
+  60% { background: rgba(255, 235, 59, 0.2); }
+  100% { background: transparent; }
+}
+
+.spell-effect.earth { animation-name: spellEarthFlash; }
+@keyframes spellEarthFlash {
+  0% { background: rgba(141, 110, 99, 0.3); }
+  100% { background: transparent; }
+}
+
+.spell-effect.divine { animation-name: spellDivineFlash; }
+@keyframes spellDivineFlash {
+  0% { background: rgba(255, 245, 157, 0.3); }
+  100% { background: transparent; }
+}

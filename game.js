@@ -1130,7 +1130,7 @@ function easeOutCubic(t){return 1-Math.pow(1-t,3);}
 const FONT_FANTASY = '"Optimus Princeps", "MedievalSharp", "Uncial Antiqua", "Cinzel", serif';
 const FONT_FANTASY_BOLD = '600'; // Semibold weight
 const FONT_FANTASY_ITALIC = 'italic';
-const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'; // For Sanskrit diacritics
+const FONT_FALLBACK = 'serif'; // For Sanskrit diacritics — plain serif to blend naturally
 
 // ─── HELPER: Detect Sanskrit diacritics ───
 function hasSanskritChars(text) {

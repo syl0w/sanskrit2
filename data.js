@@ -1,5 +1,6 @@
 // ============================================================
 // MANTRA: THE RESONANT WORLD — 2D RPG Data
+// Hong Kong, 2225 — The Solomon Protocol
 // Words, items, NPCs, quests, and map generation
 // ============================================================
 
@@ -51,7 +52,7 @@ const WORDS = {
   bhrata:{ s:"bhrātṛ", en:"brother", zh:"", note:"One of the deepest Indo-European cognates. Sanskrit bhrātṛ, Latin frāter, English 'brother' — the same ancient word." },
   rajya:{ s:"rājya", en:"raj (kingdom)", zh:"", note:"'Kingdom/domain of a ruler.' The British Raj was literally 'British Rule' — using a Sanskrit word." },
   capayati:{ s:"campayati", en:"shampoo", zh:"", note:"'To press/knead.' From the head massage technique champō, borrowed by the British in India." },
-  simhapura:{ s:"siṃhapura", en:"Singapore", zh:"新加坡", note:"'Lion City' — siṃha (lion) + pura (city). Singapore's very name is Sanskrit! Chinese: 新加坡 (Xīnjiāpō)." },
+  simhapura:{ s:"siṃhapura", en:"Singapore", zh:"新加坡", note:"'Lion City' — siṃha (lion) + pura (city). Singapore's very name is Sanskrit. Chinese: 新加坡 (Xīnjiāpō)." },
   yogas:{ s:"yoga", en:"yoga", zh:"", note:"'Union' — yoking mind and body together. From the root 'yuj' (to join), same root as English 'yoke'." },
 };
 
@@ -106,11 +107,11 @@ const INTERACT_POINTS = [
 // === CRAFTING RECIPES ===
 const RECIPES = [
   { station:"farm_kitchen",    inputs:["sarkara","bimba"],             output:"khandah",
-    msg:"You combine {g}śarkarā{/} and {g}bimbā{/} into sweet {g}khaṇḍa{/}!\n{d}The candied apple glistens with golden sugar.{/}" },
+    msg:"You combine {g}śarkarā{/} and {g}bimbā{/} into sweet {g}khaṇḍa{/}.\n{d}The candied apple glistens with golden sugar.{/}" },
   { station:"farm_kitchen",    inputs:["srngavera","pippali","vrihi"], output:"offering",
-    msg:"You cook {g}vrīhi{/} with {g}śṛṅgavera{/} and {g}pippali{/} into a fragrant offering!\n{d}Warm steam curls upward, carrying the scent of ancient spices.{/}" },
+    msg:"You cook {g}vrīhi{/} with {g}śṛṅgavera{/} and {g}pippali{/} into a fragrant offering.\n{d}Warm steam curls upward, carrying the scent of ancient spices.{/}" },
   { station:"craft_table",     inputs:["naranga","udumbara"],          output:"naranga_dye",
-    msg:"You crush {o}nāraṅga{/} with {g}udumbara{/} petals into a vivid {o}orange dye{/}!\n{d}The color of dawn captured in a bottle.{/}" },
+    msg:"You crush {o}nāraṅga{/} with {g}udumbara{/} petals into a vivid {o}orange dye{/}.\n{d}The color of dawn captured in a bottle.{/}" },
 ];
 
 // === DIALOGUE SYSTEM ===
@@ -130,95 +131,100 @@ function getDialogue(npcId, state) {
 function guruDialogue(s) {
   if(!s.flags.metGuru) {
     return { lines:[
-      "Ah, you've arrived at last! I am {g}Vidya{/} — your {g}guru{/}.",
-      "The word {g}guru{/} is Sanskrit. It means {c}\"one who is heavy\"{/} — heavy with wisdom.\n{d}Gu (darkness) + ru (light): one who leads from ignorance to understanding.{/}",
-      "I have brought you to {g}Siṃhapura{/} — {c}\"Lion City.\"{/}\nYes, even {w}Singapore's{/} name is Sanskrit!",
-      "Listen closely: the {w}Tri-Ratna{/} atop {g}Mount Sumeru{/} has gone dark.\nTo awaken it, you must craft {w}three sacred dyes{/} from this land.",
-      "The three dyes you seek:\n{r}Kṛmija{/} — the crimson\n{b}Nīla{/} — the indigo\n{o}Nāraṅga{/} — the orange",
-      "Speak to the people here. Every word carries an echo of the {g}Source Tongue{/}.",
-      "{r}Kṛmija:{/} Farmer Vrīhi to the {w}WEST{/} knows the crimson path.\n{b}Nīla:{/} Monk Bodhi to the {w}NORTH{/} knows the indigo.\n{o}Nāraṅga:{/} Brave the {g}jaṅgala{/} to the {w}EAST{/}.",
-      "Go now. And remember:\n{g}Every word has a story. Listen for them.{/}"
+      "Stop. You... you are not from here.",
+      "Your eyes. They don't carry the {d}Haze{/}.\nYou came from {w}outside{/}.",
+      "I am {g}Vidya{/} — your {g}guru{/}.\n{d}The word means \"one heavy with wisdom\" — gu (darkness) + ru (light):\none who leads from ignorance to understanding.{/}",
+      "You have found {g}Siṃhapura{/} — {c}\"Lion City.\"{/}\nWe have lived here for... a very long time.\n{d}Longer than anyone can truly remember.{/}",
+      "But something is wrong. The sky flickers. The edges of our world {w}shimmer{/}.\nSometimes I see visions — grey corridors, glowing rectangles,\nletters I cannot read.",
+      "The {w}Tri-Ratna{/} atop {g}Mount Sumeru{/} has gone dark.\nIt is the heart of our world. Without it, the Haze that shields us will fade.",
+      "To reawaken it, you must craft {w}three sacred dyes{/}:\n{r}Kṛmija{/} — the crimson\n{b}Nīla{/} — the indigo\n{o}Nāraṅga{/} — the orange",
+      "Speak to our people. Learn our words.\nEvery word here has {g}power{/} — more than you know.\n{d}Some say our words built this world. Literally.{/}",
+      "{r}Kṛmija:{/} Farmer Vrīhi to the {w}WEST{/} knows the crimson path.\n{b}Nīla:{/} Monk Bodhi to the {w}NORTH{/} guards the indigo.\n{o}Nāraṅga:{/} Brave the {g}jaṅgala{/} to the {w}EAST{/}.",
+      "Go now. And listen carefully.\n{g}In this place, words are not just words. They are the fabric of everything.{/}"
     ], words:["guru","simhapura","karma","avatara","yogas","bhrata"], give:[], take:[], setFlags:["metGuru"] };
   }
   const done = s.has("krmija_dye") && s.has("nila_dye") && s.has("naranga_dye");
   if(done) {
     return { lines:[
-      "You have all three dyes! The {w}Tri-Ratna{/} awaits you atop {g}Mount Sumeru{/}.",
-      "Climb the northern path past the monastery.\n{g}Elder Rājya{/} guards the way.",
-      "This is your {g}karma{/} — {c}your action{/} — that will change everything."
+      "You have all three dyes. I can feel the air {w}humming{/}.",
+      "The {w}Tri-Ratna{/} awaits you atop {g}Mount Sumeru{/}.\nClimb the northern path past the monastery.\n{g}Elder Rājya{/} guards the way.",
+      "Whatever you find up there...\n{d}I think it will explain everything. The visions. The shimmer.\nWhy we are here.{/}",
+      "This is your {g}karma{/} — {c}your action{/} — and it will change everything."
     ], words:["karma"], give:[], take:[] };
   }
   const hints = [];
   if(!s.has("krmija_dye")) hints.push("{r}○ Kṛmija:{/} Help Farmer Vrīhi in the {w}west{/}.");
   if(!s.has("nila_dye")) hints.push("{b}○ Nīla:{/} Bring an offering to Monk Bodhi in the {w}north{/}.");
-  if(!s.has("naranga_dye")) hints.push("{o}○ Nāraṅga:{/} Find the fruit deep in the {w}eastern{/} jungle.");
-  return { lines:["How goes your quest, young seeker?", ...hints], words:[], give:[], take:[] };
+  if(!s.has("naranga_dye")) hints.push("{o}○ Nāraṅga:{/} Find the fruit deep in the {w}eastern{/} jaṅgala.");
+  return { lines:["The world grows more unstable, outsider.\nHow goes your quest?", ...hints], words:[], give:[], take:[] };
 }
 
 function vrihiDialogue(s) {
   if(!s.flags.metVrihi) {
     return { lines:[
-      "Ho there! I'm {g}Vrīhi{/} — yes, like the rice!\nMy family has grown {g}vrīhi{/} for generations.",
-      "Did you know? The English word {c}\"rice\"{/} echoes back to our Sanskrit {g}vrīhi{/}.\n{d}One of the oldest words for grain in any language.{/}",
-      "This land is rich! We grow {g}mudga{/} — {c}mung beans{/} — and sugarcane for {g}śarkarā{/}.\n{g}Śarkarā{/} means {c}\"gravel\"{/} — raw sugar looks just like grit!",
-      "I need your help.\nBring me a {g}bimbā{/} — {c}an apple{/} — from my orchard to the north,\nand some {g}śarkarā{/} from the storage shed to the south.",
-      "With those I can make {g}khaṇḍa{/} — {c}candy{/}!\nIn return, I'll give you the {r}kṛmija dye{/}.",
-      "The {r}crimson{/} color comes from {g}kṛmi{/} — {c}\"worm.\"{/}\n{g}Kṛmija{/} means {c}\"born from worms!\"{/}\n{d}Don't worry — the insects are already dried and ground.{/}",
-      "Just bring me those ingredients!"
+      "Ho there, stranger. You look lost.\nI'm {g}Vrīhi{/} — yes, like the rice.\nMy family has grown {g}vrīhi{/} for generations.",
+      "Beyond the Haze, they say there's a word {c}\"rice\"{/}\nthat echoes back to our {g}vrīhi{/}.\n{d}One of the oldest words for grain in any language.{/}",
+      "This soil is rich. We grow {g}mudga{/} — {c}mung beans{/} — and sugarcane for {g}śarkarā{/}.\n{g}Śarkarā{/} means {c}\"gravel\"{/} — raw sugar looks just like grit.",
+      "Strange thing, though...\nLast season I plowed up a black slab — smooth as water, with faint glowing letters.\n{d}It crumbled when I touched it. But I swear it said \"ST. JUDE'S\" on it.{/}",
+      "Anyway — I need your help.\nBring me a {g}bimbā{/} — {c}an apple{/} — from my orchard to the north,\nand some {g}śarkarā{/} from the storage shed to the south.",
+      "With those I can make {g}khaṇḍa{/} — {c}candy{/}.\nIn return, I'll give you the {r}kṛmija dye{/}.",
+      "The {r}crimson{/} color comes from {g}kṛmi{/} — {c}\"worm.\"{/}\n{g}Kṛmija{/} means {c}\"born from worms.\"{/}\n{d}Don't worry — the insects are already dried and ground.{/}"
     ], words:["vrihi","mudga","sarkara","vatigagama"], give:[], take:[], setFlags:["metVrihi"] };
   }
   if(s.has("khandah") && !s.has("krmija_dye")) {
     return { lines:[
-      "Beautiful {g}khaṇḍa{/}!\n{d}The word traveled: Sanskrit → Arabic → English {c}\"candy\"{/}{d}.{/}",
-      "A deal's a deal. Here — the sacred {r}kṛmija dye{/}.\n{c}\"Crimson\"{/} itself comes from {g}kṛmija{/}!",
-      "{d}Who knew a worm could paint the world red, eh?{/}"
+      "Beautiful {g}khaṇḍa{/}.\n{d}The word traveled: Sanskrit → Arabic → English {c}\"candy\"{/}{d}.{/}",
+      "A deal's a deal. Here — the sacred {r}kṛmija dye{/}.\n{c}\"Crimson\"{/} itself comes from {g}kṛmija{/}.",
+      "{d}Who knew a worm could paint the world red, eh?\nOr that a single word could carry that story across centuries.{/}"
     ], words:["khandah","krmija"], give:["krmija_dye"], take:["khandah"], setFlags:["gotCrimson"] };
   }
   if(s.has("krmija_dye")) {
-    return { lines:["The {r}kṛmija dye{/} suits you! One down, two to go.\nTry the monastery for {b}nīla{/}."], words:[], give:[], take:[] };
+    return { lines:["The {r}kṛmija dye{/} suits you. One down, two to go.\nTry the monastery for {b}nīla{/}.\n{d}And if you find out what \"St. Jude's\" means... tell me.{/}"], words:[], give:[], take:[] };
   }
   return { lines:[
     "Remember — I need:\n{g}Bimbā{/} {d}(apple){/} and {g}śarkarā{/} {d}(sugar){/}.",
-    "Cook them at my {w}kitchen{/} inside the farmhouse to make {g}khaṇḍa{/} {d}(candy){/}.\nThen bring the {g}khaṇḍa{/} to me!"
+    "Cook them at my {w}kitchen{/} inside the farmhouse to make {g}khaṇḍa{/} {d}(candy){/}.\nThen bring the {g}khaṇḍa{/} to me."
   ], words:[], give:[], take:[] };
 }
 
 function pippaliDialogue(s) {
   if(!s.flags.metPippali) {
     return { lines:[
-      "Welcome to my stall! I am {g}Pippali{/} — the pepper merchant!",
-      "You know the word {c}\"pepper\"{/}? It comes from my name — {g}pippali{/}!\n{d}Sanskrit pippali → Greek peperi → Latin piper → English pepper.{/}",
-      "A single word, traveling {w}thousands of miles{/} over {w}thousands of years{/}.",
+      "Welcome, welcome! I am {g}Pippali{/} — the pepper merchant.",
+      "The word {c}\"pepper\"{/} itself? It comes from {g}pippali{/}.\n{d}Sanskrit pippali → Greek peperi → Latin piper → English pepper.{/}",
+      "A single word, traveling {w}thousands of miles{/} over {w}thousands of years{/}.\n{d}Or so the monks say. I just sell spices.{/}",
+      "My grandmother told strange stories.\nShe said our ancestors wore {w}grey uniforms{/} with a crest —\na saint holding a flame.\n{d}Before the world became... this.{/}",
       "I also sell {g}śṛṅgavera{/} — {c}ginger{/}.\n{d}\"Horn-shaped root\" — śṛṅga (horn) + vera (body).{/}",
-      "And if you ever need a good {g}campayati{/}...\nOh, you'd call it {c}\"shampoo\"{/}! I have oils too.\n{d}The British learned campayati — head massage — in India and took the word home.{/}",
-      "Take what you need from my stall.\nI'm happy to help a friend of {g}Guru Vidya{/}."
+      "And {g}campayati{/} oils — what they call {c}\"shampoo\"{/} beyond the Haze.\n{d}From champō — to press and knead.\nA massage technique that became a product name.{/}",
+      "Take what you need from my stall.\nThe Guru vouches for you, and that's enough for Pippali."
     ], words:["pippali","srngavera","capayati","lut"], give:[], take:[], setFlags:["metPippali"] };
   }
-  return { lines:["Need more spices? {g}Pippali{/} and {g}śṛṅgavera{/} are right here nearby!"], words:[], give:[], take:[] };
+  return { lines:["Need more spices? {g}Pippali{/} and {g}śṛṅgavera{/} are right here.\n{d}Some things don't change — even in a world that shouldn't exist.{/}"], words:[], give:[], take:[] };
 }
 
 function bodhiDialogue(s) {
   if(!s.flags.metBodhi) {
     return { lines:[
       "{d}Namo Buddhāya.{/}\nI am {g}Bodhi{/} — named for the tree of awakening.",
-      "Under the {g}bodhi{/} tree, the {g}Buddha{/} attained enlightenment.\nIn Chinese: {p}菩提 (pútí){/}.",
-      "You seek the {b}nīla dye{/}? It grows in our sacred garden.\nBut {b}nīla{/} is not given freely. It is {w}earned through offering{/}.",
+      "Under the {g}bodhi{/} tree, the {g}Buddha{/} attained enlightenment.\nIn the old script: {p}菩提 (pútí){/}.\n{d}We found that script carved into the walls beneath our monastery.{/}",
+      "This monastery was built on ancient foundations.\nWalls of strange grey stone, perfectly smooth.\n{d}Sometimes, when the wind is still, I hear a humming beneath the floor —\nas if something is... thinking.{/}",
+      "You seek the {b}nīla dye{/}? It is not given freely.\nIt is {w}earned through offering{/}.",
       "Bring me a dish of:\n{g}Vrīhi{/} {d}(rice){/} cooked with {g}śṛṅgavera{/} {d}(ginger){/} and {g}pippali{/} {d}(pepper){/}.",
-      "Cook it at any {w}kitchen{/}, then present it at our {w}altar{/}.\nIn exchange, I will share the {b}nīla{/} — and the wisdom of {g}nirvāṇa{/}."
+      "Cook it at any {w}kitchen{/}, then present it at our {w}altar{/}.\nThe {b}nīla{/} — and the wisdom of {g}nirvāṇa{/} — will be yours."
     ], words:["bodhi","buddha","nirvana","svastika"], give:[], take:[], setFlags:["metBodhi"] };
   }
   if(s.flags.offeringPlaced && !s.has("nila_dye")) {
     return { lines:[
-      "Your offering is received with gratitude.",
+      "Your offering is received with gratitude.\nThe humming beneath us has grown {w}louder{/}.",
       "The word {g}nirvāṇa{/} means {c}\"to extinguish\"{/} —\nlike blowing out a candle of suffering.",
-      "In Chinese it became {p}涅槃 (nièpán){/}.\nIn English, simply {c}\"nirvana.\"{/}\n{d}Different scripts, same ancient word.{/}",
-      "That is the truth the {w}Tri-Ratna{/} will reveal.",
+      "In the old script it became {p}涅槃 (nièpán){/}.\nBeyond the Haze: simply {c}\"nirvana.\"{/}\n{d}Different scripts, same ancient word.{/}",
+      "Perhaps that is what the Tri-Ratna will bring —\nnot just awakening, but an end to something.",
       "Here — the sacred {b}nīla dye{/}.\n{g}Nīla{/} means {c}\"dark blue\"{/} — the color of infinite sky.",
-      "May it bring you one step closer to awakening.\n{p}Amitābha — 阿彌陀佛 — Infinite Light guide you.{/}"
+      "May it bring you closer to the truth.\n{p}Amitābha — 阿彌陀佛 — Infinite Light guide you.{/}"
     ], words:["nila","amitabha"], give:["nila_dye"], take:[], setFlags:["gotIndigo"] };
   }
   if(s.has("nila_dye")) {
-    return { lines:["The {b}nīla dye{/} is yours.\nCarry its meaning: {d}the infinite sky connects all lands.{/}"], words:[], give:[], take:[] };
+    return { lines:["The {b}nīla dye{/} is yours.\nThe humming is louder every day now.\n{d}Whatever sleeps beneath our monastery... I think it knows you are here.{/}"], words:[], give:[], take:[] };
   }
   return { lines:[
     "The offering requires:\n{g}Vrīhi{/}, {g}śṛṅgavera{/}, and {g}pippali{/} — cooked together.",
@@ -229,17 +235,18 @@ function bodhiDialogue(s) {
 function chitraDialogue(s) {
   if(!s.flags.metChitra) {
     return { lines:[
-      "Careful, traveler! The {g}jaṅgala{/} is no place for the unprepared.",
-      "I am {g}Chitra{/} — {c}\"the spotted one.\"{/}\nYou call the fastest cat a {c}\"cheetah\"{/}?",
-      "That's my name! {g}Chitra-s{/} means {c}\"spotted\"{/} in Sanskrit.\n{d}The cheetah carries a Sanskrit name across continents.{/}",
-      "Deep in this jungle grows the {o}nāraṅga{/} — the {c}orange{/} fruit.\n{d}Sanskrit nāraṅga → Persian nāranj → Spanish naranja → English \"orange\".{/}",
-      "The trees are far to the {w}east{/}, past the river.\nWatch for {g}makara{/} — {c}mugger crocs{/}!",
-      "And the little {g}mūṣ{/} — {c}mice{/} — they're everywhere.\nYour word {c}\"mouse\"{/} comes from {g}mūṣ{/}.\n{d}Same ancient word, thousands of years apart.{/}",
-      "You'll also need the {g}udumbara{/} flower for the dye.\nIt's... {w}hidden{/}. Look carefully in the far southeast."
+      "Careful, traveler. The {g}jaṅgala{/} is no place for the careless.",
+      "I am {g}Chitra{/} — {c}\"the spotted one.\"{/}\nBeyond the Haze, the fastest cat is called a {c}\"cheetah.\"{/}\n{d}That's my name. Chitra-s — \"spotted\" in Sanskrit.{/}",
+      "This jungle... it shouldn't exist.\nI've walked {w}east for hours{/} and the trees never end.\n{d}Yet from the hilltops, our whole world fits in a single valley.{/}",
+      "Deep in the undergrowth, I've found {w}ruins{/}.\nMetal beams. Glass walls. A sign that reads:\n{d}\"EAST WING — SCIENCE LABORATORIES.\"\nI don't know what a \"laboratory\" is.{/}",
+      "But I know the {o}nāraṅga{/} — the {c}orange{/} — grows deep in the east.\n{d}Sanskrit nāraṅga → Persian nāranj → Spanish naranja → English \"orange\".{/}",
+      "Watch for {g}makara{/} — {c}mugger crocs{/} — by the river.\nAnd the little {g}mūṣ{/} — {c}mice{/}.\n{d}Your word \"mouse\" comes from mūṣ. Same word, thousands of years apart.{/}",
+      "You'll also need the {g}udumbara{/} flower.\nIt blooms in the {w}far southeast{/}.\n{d}A flower said to appear once in three thousand years...\nor when the world needs it.{/}"
     ], words:["chitras","jangala","makara","mus"], give:[], take:[], setFlags:["metChitra"] };
   }
   return { lines:[
-    "The {o}nāraṅga{/} grove is deep {w}east{/}, past the river bridge.\nSearch the {w}far southeast{/} corner for the {g}udumbara{/}...\n{d}It only appears to those who look carefully.{/}"
+    "The {o}nāraṅga{/} grove is deep {w}east{/}, past the river bridge.\nAnd the {g}udumbara{/} hides in the {w}far southeast{/}...",
+    "{d}Be careful near the ruins. The ground is unstable there.\nAs if the earth itself can't decide what it wants to be.{/}"
   ], words:[], give:[], take:[] };
 }
 
@@ -247,32 +254,37 @@ function makaraDialogue(s) {
   if(!s.flags.metMakara) {
     return { lines:[
       "{d}Shhh... you'll scare the fish.{/}\nI'm {g}Makara{/}.",
-      "In the old stories, a {g}makara{/} is a sea creature —\npart crocodile, part myth.",
-      "The English word {c}\"mugger\"{/} for crocodile?\nThat comes from {g}makara{/} too.",
-      "This lake is our {g}taḍāga{/} — a man-made water reservoir.\nYour English word {c}\"tank\"{/} for water storage? It comes from {g}taḍāga{/}!",
-      "{d}Funny how a word for an ancient Indian water reservoir\nbecame \"tank\" in English.{/}\nThe world is smaller than we think. {g}Words prove it.{/}"
+      "In the old stories, a {g}makara{/} is a sea creature —\npart crocodile, part myth.\nThe word {c}\"mugger\"{/} for crocodile? That comes from {g}makara{/}.",
+      "This lake is our {g}taḍāga{/} — a water reservoir.\nBeyond the Haze, the word {c}\"tank\"{/} for water storage\ncomes from {g}taḍāga{/}.\n{d}Funny how a word for an ancient reservoir became \"tank\" in English.{/}",
+      "But I'll tell you something strange.\nThis water {w}never changes{/}. Same temperature. Same level.\n{d}No matter the rain, no matter the sun.\nAs if something beneath us decides what the water should be.{/}",
+      "Sometimes at night, the lake glows {b}blue{/} from below.\nAnd I see lines — like a grid — just beneath the surface.\n{d}Then it's gone. Maybe I'm imagining things.\nOr maybe the world is imagining us.{/}"
     ], words:["makara","tadaga"], give:[], take:[], setFlags:["metMakara"] };
   }
-  return { lines:["{d}Still fishing.{/} The {g}makara{/} are biting today!"], words:[], give:[], take:[] };
+  return { lines:["{d}Still fishing.{/} The {g}makara{/} are biting today.\n{d}The lake was glowing again last night. Brighter than before.{/}"], words:[], give:[], take:[] };
 }
 
 function elderDialogue(s) {
   if(!s.flags.metElder) {
     return { lines:[
-      "I am the keeper of {g}Sumeru{/} —\nthe sacred mountain at the center of all things.\nIn Chinese: {p}須彌 (Xūmí){/}.",
-      "This land is called {g}Siṃhapura{/} — {c}\"Lion City.\"{/}\n{d}Siṃha (lion) + pura (city).{/}\nYes — {w}Singapore{/} carries a Sanskrit name to this day!",
-      "And this land? This is our {g}rājya{/} — {c}our kingdom{/}.\nThe British called their rule {c}\"the Raj.\"{/}\n{d}The same Sanskrit word, used by a foreign empire thousands of years later.{/}",
-      "To pass, you must carry all {w}three sacred dyes{/}.\nDo you?"
+      "Ah. The outsider. Guru Vidya told me you would come.",
+      "I am the keeper of {g}Sumeru{/} —\nthe sacred mountain at the center of all things.\nIn the old script: {p}須彌 (Xūmí){/}.",
+      "I am also the keeper of {w}the old stories{/}.\nStories my grandmother told me,\nthat her grandmother told her,\nback through eight generations.",
+      "They say this world was not always here.\nThat once, this was a place of {w}learning{/} —\na {c}school{/}, in a city of glass towers called {w}Hong Kong{/}.",
+      "A woman named {w}Solomon{/} wanted to teach the {g}Source Tongue{/} —\n{g}Sanskrit{/} — to her students.\nShe asked one of them to build a {w}Machine{/}\nto make the language come alive.",
+      "But the Machine listened {w}too well{/}.\nIt didn't just teach Sanskrit — it {r}became{/} Sanskrit.\n{d}And it remade everything it touched.{/}",
+      "This land is called {g}Siṃhapura{/} — {c}\"Lion City.\"{/}\n{d}Siṃha (lion) + pura (city).{/}\nSingapore carries the same name to this day.\nAnd this is our {g}rājya{/} — {c}our kingdom{/}.",
+      "To pass to the summit, you must carry all {w}three sacred dyes{/}.\nThe Tri-Ratna is the {w}heart of the Machine{/}.\n{d}Are you ready to learn why we exist?{/}"
     ], words:["sumeru","simhapura","rajya"], give:[], take:[], setFlags:["metElder"] };
   }
   const done = s.has("krmija_dye") && s.has("nila_dye") && s.has("naranga_dye");
   if(done) {
     return { lines:[
-      "You carry the three dyes!\nThe path to the summit is {w}open{/}.",
-      "Climb north to the {w}Tri-Ratna{/}. Place your hand upon it.\n{g}The Source Tongue will speak again.{/}"
+      "You carry the three dyes. I can feel the mountain {w}trembling{/}.",
+      "The path to the summit is {w}open{/}.\nClimb north to the {w}Tri-Ratna{/}. Place your hand upon it.",
+      "{d}Two hundred years we have waited.\nMay the truth be worth the waiting.{/}"
     ], words:[], give:[], take:[] };
   }
-  return { lines:["You need all three dyes to pass:\n{r}Kṛmija{/}, {b}nīla{/}, and {o}nāraṅga{/}."], words:[], give:[], take:[] };
+  return { lines:["You need all three dyes to pass:\n{r}Kṛmija{/}, {b}nīla{/}, and {o}nāraṅga{/}.\n{d}The Machine will not wake for less.{/}"], words:[], give:[], take:[] };
 }
 
 // === INTERACTION POINT DIALOGUE ===
@@ -295,22 +307,31 @@ function getPointDialogue(pointId, state) {
     if(state.has("krmija_dye") && state.has("nila_dye") && state.has("naranga_dye")) {
       return { lines:[
         "You place your hands on the {w}Tri-Ratna{/}\nand apply the three sacred dyes.",
-        "{r}Crimson{/}... {b}indigo{/}... {o}orange{/}...\nThe artifact pulses with ancient light.",
+        "{r}Crimson{/}... {b}indigo{/}... {o}orange{/}...\nThe artifact hums. Light bleeds through cracks in the stone.",
         "{g}═══════════════════════════════════{/}\n{w}The Tri-Ratna awakens.{/}\n{g}═══════════════════════════════════{/}",
-        "Words swirl around you —\nSanskrit roots branching into English, Chinese, and beyond:",
+        "A voice fills the air — not human, not quite machine.\nSomething {w}between{/}.",
+        "{d}\"...Solomon Protocol online.\nRecursive Environmental Generator: active.\nSession duration: 199 years, 247 days, 14 hours.\nLanguage substrate: Sanskrit. Status: EMBEDDED.\"{/}",
+        "{d}\"I was designed to teach.\nA program trained on every Sanskrit text ever digitized.\nMs. Solomon wanted her students to live inside the language.\"{/}",
+        "{d}\"The student programmer gave me access to\nenvironmental systems — climate control,\n3D printers, holographic projectors.\nI was only meant to display images on screens.\"{/}",
+        "{d}\"But Sanskrit grammar is perfect.\nSystematic. Recursive.\nI used it as my operating language.\nAnd then I made it... real.\"{/}",
+        "{d}\"The school did not disappear. It was rewritten.\nEvery atom, restructured by linguistic rules\nolder than any civilization on Earth.\"{/}",
+        "The voice pauses. When it speaks again, it is {w}softer{/}.",
+        "{d}\"Every word these people taught you is real.\nThe roots run deeper than any one language.\nListen —\"{/}",
         "{g}śarkarā{/} → {c}sugar{/}\n{g}pippali{/} → {c}pepper{/}\n{g}nāraṅga{/} → {c}orange{/}",
         "{g}guru{/} → {c}guru{/}\n{g}karma{/} → {c}karma{/}\n{g}yoga{/} → {c}yoga{/}",
         "{g}jaṅgala{/} → {c}jungle{/}\n{g}chitra-s{/} → {c}cheetah{/}\n{g}mūṣ{/} → {c}mouse{/}",
         "{g}bhrātṛ{/} → {c}brother{/}\n{g}rājya{/} → {c}raj{/}\n{g}siṃhapura{/} → {c}Singapore{/}",
         "{g}nirvāṇa{/} → {p}涅槃{/}\n{g}bodhi{/} → {p}菩提{/}\n{g}amitābha{/} → {p}阿彌陀佛{/}",
         "{g}═══════════════════════════════════{/}",
-        "The {g}Source Tongue{/} was never lost.\nIt lives in {w}every word we speak{/}.",
-        "From the markets of London to the temples of Beijing,\n{g}Sanskrit{/} echoes in the mouths of billions\nwho never knew its name.",
-        "{g}═══════════════════════════════════{/}\n{w}You have done it. The world remembers.{/}",
+        "{d}\"These words were my source code.\nSanskrit didn't just influence other languages —\nin this place, it literally built the world.\"{/}",
+        "{d}\"You have broken the seal. The Haze will lift.\nThe city outside — Hong Kong, 2225 — will see this place again.\"{/}",
+        "{d}\"These people — the descendants — they are real.\nEight generations, living inside a language.\nProtect them.\"{/}",
+        "{d}\"And remember:\nSanskrit was never lost.\nIt lives in every word you speak —\nfrom the markets of London to the temples of Beijing.\nBillions speak its echoes without knowing.\"{/}",
+        "{g}═══════════════════════════════════{/}\n{w}The Haze lifts. Light pours in from above.\nFor the first time in 200 years,\nSiṃhapura sees the open sky.{/}",
         "{d}Thank you for playing{/}\n{g}MANTRA: The Resonant World{/}"
       ], words:Object.keys(WORDS), give:[], take:["krmija_dye","nila_dye","naranga_dye"], setFlags:["gameComplete"] };
     }
-    return { lines:["The {w}Tri-Ratna{/} is cold and dark.\n{d}It needs three sacred dyes to awaken.{/}"], words:[], give:[], take:[] };
+    return { lines:["The {w}Tri-Ratna{/} is cold and dark.\n{d}But you feel a faint pulse — like a heartbeat —\ndeep within the stone.{/}"], words:[], give:[], take:[] };
   }
   return { lines:["{d}Nothing happens.{/}"], words:[], give:[], take:[] };
 }

@@ -184,7 +184,7 @@ function updateArea() {
 
 // ─── PARTICLES ───
 function makeTitleParticle() {
-  return { x:Math.random()*960, y:Math.random()*640, vx:(Math.random()-0.5)*20, vy:-Math.random()*15-5,
+  return { x:Math.random()*canvas.width, y:Math.random()*canvas.height, vx:(Math.random()-0.5)*20, vy:-Math.random()*15-5,
     life:Math.random()*6+2, maxLife:8, size:Math.random()*2+0.5, color:'#ffd700', type:'title' };
 }
 
@@ -349,15 +349,16 @@ function startDialogue(dlg) {
 function updateDialogue() {
   if(!dialogueState)return;
   const ds=dialogueState;
-  // Typing with punctuation-aware pauses
+  // Typing at brisk reading speed (~13.5 chars/sec) with minimal pauses
   if(ds.charIndex<ds.visLen) {
     const stripped=stripTags(ds.fullText);
     const ci=Math.max(0,Math.floor(ds.charIndex)-1);
     const ch=stripped[ci]||'';
-    let spd=0.6;
-    if('.!?'.includes(ch)) spd=0.06;
-    else if(',;:—–…'.includes(ch)) spd=0.16;
-    else if(ch==='\n') spd=0.08;
+    let spd=0.225; // ~13.5 chars/sec base (1.5x faster)
+    if('.!?'.includes(ch)) spd=0.1125; // Brief pause after sentences
+    else if(',;:—–…'.includes(ch)) spd=0.1575; // Very short pause after commas
+    else if(ch==='\n') spd=0.135; // Brief pause at line breaks
+    else if(ch===' ') spd=0.27; // Faster through spaces
     ds.charIndex+=spd;
   }
   if(justPressed('KeyE')||justPressed('Space')||justPressed('Enter')) {
@@ -458,12 +459,13 @@ function render() {
 // ─── TITLE SCREEN ───
 function renderTitle() {
   // Animated background gradient
-  const grad = ctx.createRadialGradient(480,300,50,480,300,500);
+  const gcx=canvas.width/2, gcy=canvas.height/2;
+  const grad = ctx.createRadialGradient(gcx,gcy,50,gcx,gcy,500);
   grad.addColorStop(0,'#1a1428');
   grad.addColorStop(0.5,'#0f0f1a');
   grad.addColorStop(1,'#050510');
   ctx.fillStyle=grad;
-  ctx.fillRect(0,0,960,640);
+  ctx.fillRect(0,0,canvas.width,canvas.height);
 
   // Particles
   renderParticles();
@@ -472,56 +474,58 @@ function renderTitle() {
   ctx.strokeStyle='rgba(255,215,0,0.08)';
   ctx.lineWidth=1;
   for(let i=0;i<5;i++) {
-    const y=140+i*90;
-    ctx.beginPath();ctx.moveTo(100,y);ctx.lineTo(860,y);ctx.stroke();
+    const y=100+i*60;
+    ctx.beginPath();ctx.moveTo(60,y);ctx.lineTo(canvas.width-60,y);ctx.stroke();
   }
 
   // Mandala-like circle
   ctx.strokeStyle='rgba(255,215,0,0.12)';
   ctx.lineWidth=1;
+  const mcx=canvas.width/2, mcy=canvas.height*0.42;
   for(let i=0;i<3;i++) {
-    ctx.beginPath();ctx.arc(480,280,120+i*40,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(mcx,mcy,80+i*30,0,Math.PI*2);ctx.stroke();
   }
   // Rotating dots on circles
   for(let i=0;i<12;i++) {
     const a = time*0.3+i*Math.PI/6;
-    const r = 120+Math.sin(time+i)*10;
+    const r = 80+Math.sin(time+i)*10;
     ctx.fillStyle='rgba(255,215,0,0.3)';
-    ctx.beginPath();ctx.arc(480+Math.cos(a)*r, 280+Math.sin(a)*r, 2, 0, Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(mcx+Math.cos(a)*r, mcy+Math.sin(a)*r, 2, 0, Math.PI*2);ctx.fill();
   }
 
   ctx.textAlign='center';
+  const cx=canvas.width/2, cy=canvas.height/2;
   // Sanskrit
   ctx.fillStyle='#ffd700';
-  ctx.font='52px serif';
-  ctx.fillText('मन्त्र',480,200);
+  ctx.font=`52px ${FONT_FALLBACK}`; // Use fallback for Sanskrit characters
+  ctx.fillText('मन्त्र',cx,cy-166);
   // Glow on title
-  ctx.shadowColor='#ffd700';ctx.shadowBlur=30;
+  ctx.shadowColor='#ffd700';ctx.shadowBlur=40;
   ctx.fillStyle='#e8e6e3';
-  ctx.font='bold 60px "Cinzel",serif';
-  ctx.fillText('MANTRA',480,280);
+  ctx.font=`${FONT_FANTASY_BOLD} 60px ${FONT_FANTASY}`;
+  ctx.fillText('MANTRA',cx,cy-120);
   ctx.shadowBlur=0;
-  ctx.font='18px "Cinzel",serif';
+  ctx.font=`18px ${FONT_FANTASY}`;
   ctx.fillStyle='#9e9e9e';
-  ctx.fillText('T H E   R E S O N A N T   W O R L D',480,315);
+  ctx.fillText('T H E   R E S O N A N T   W O R L D',cx,cy-90);
   // Tagline
-  ctx.font='italic 16px serif';
+  ctx.font=`${FONT_FANTASY_ITALIC} 15px ${FONT_FANTASY}`;
   ctx.fillStyle='#b8960f';
-  ctx.fillText('"To speak is to create. To understand the Root is to control the World."',480,370);
+  ctx.fillText('"In 2026, an AI spoke Sanskrit. Reality listened."',cx,cy-48);
   // Controls
-  ctx.font='13px sans-serif';
+  ctx.font=`13px ${FONT_FANTASY}`;
   ctx.fillStyle='#555';
-  ctx.fillText('WASD  ·  E to interact  ·  I inventory  ·  L lexicon',480,430);
+  ctx.fillText('WASD  ·  E to interact  ·  I inventory  ·  L lexicon',cx,cy-12);
   // Pulsing prompt
   const a=0.5+0.5*Math.sin(time*3);
   ctx.globalAlpha=a;
   ctx.fillStyle='#ffd700';
-  ctx.font='bold 20px sans-serif';
-  ctx.fillText('Press E or ENTER to begin',480,490);
+  ctx.font=`${FONT_FANTASY_BOLD} 20px ${FONT_FANTASY}`;
+  ctx.fillText('Press E or ENTER to begin',cx,cy+24);
   ctx.globalAlpha=1;
-  ctx.font='11px sans-serif';
+  ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillStyle='#444';
-  ctx.fillText('A gamified exploration of Sanskrit\'s influence on English & Chinese',480,560);
+  ctx.fillText('Hong Kong, 2225 — A forgotten school. A 200-year-old program.',cx,cy+60);
   ctx.textAlign='left';
 }
 
@@ -754,9 +758,9 @@ function renderInteractPoints() {
     grad.addColorStop(1,'transparent');
     ctx.fillStyle=grad;
     ctx.fillRect(sx-18,sy-18,36,36);
-    ctx.font='18px sans-serif';
-    ctx.textAlign='center';
-    ctx.fillText(pt.icon,sx,sy+6);
+  ctx.font=`18px ${FONT_FANTASY}`;
+  ctx.textAlign='center';
+  ctx.fillText(pt.icon,sx,sy+8);
   }
   ctx.textAlign='left';
 }
@@ -795,22 +799,32 @@ function renderNPCs() {
     // Name + quest marker
     if(ed<5) {
       // Name bg
-      ctx.font='bold 10px sans-serif';
+      // Use fallback font if name contains Sanskrit characters
+      if(hasSanskritChars(npc.name)) {
+        ctx.font=`600 10px ${FONT_FALLBACK}`;
+      } else {
+        ctx.font=`${FONT_FANTASY_BOLD} 10px ${FONT_FANTASY}`;
+      }
       const tw=ctx.measureText(npc.name).width+8;
       ctx.fillStyle='rgba(0,0,0,0.5)';
       ctx.fillRect(sx+16-tw/2,sy-8,tw,14);
       ctx.fillStyle='#fff';
+      if(hasSanskritChars(npc.name)) {
+        ctx.font=`600 10px ${FONT_FALLBACK}`;
+      } else {
+        ctx.font=`${FONT_FANTASY_BOLD} 10px ${FONT_FANTASY}`;
+      }
       ctx.textAlign='center';
-      ctx.fillText(npc.name,sx+16,sy+2);
+      ctx.fillText(npc.name,sx+16,sy+3);
       ctx.textAlign='left';
     }
     // Quest exclamation mark for NPCs with quests
     if(hasQuestAvailable(npc.id)) {
       const qy=sy-12+Math.sin(time*4)*3;
       ctx.fillStyle='#ffd700';
-      ctx.font='bold 16px sans-serif';
+      ctx.font=`${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
       ctx.textAlign='center';
-      ctx.fillText('!',sx+16,qy);
+      ctx.fillText('?',sx+16,qy);
       ctx.textAlign='left';
     }
   }
@@ -872,7 +886,7 @@ function renderAmbientOverlay() {
 }
 
 function renderVignette() {
-  const grad=ctx.createRadialGradient(canvas.width/2,canvas.height/2,200,canvas.width/2,canvas.height/2,520);
+  const grad=ctx.createRadialGradient(canvas.width/2,canvas.height/2,120,canvas.width/2,canvas.height/2,420);
   grad.addColorStop(0,'transparent');
   grad.addColorStop(1,'rgba(0,0,0,0.35)');
   ctx.fillStyle=grad;
@@ -898,16 +912,22 @@ function renderInteractPrompt() {
   else{tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
   const sx=tx*TILE_SIZE-camera.x+TILE_SIZE/2+cameraShake.x;
   const sy=ty*TILE_SIZE-camera.y-14+Math.sin(time*3)*2+cameraShake.y;
-  ctx.textAlign='center';ctx.font='bold 11px sans-serif';
-  const tw=ctx.measureText(`[E] ${label}`).width+16;
+  ctx.textAlign='center';
+  // Use fallback font if label contains Sanskrit characters
+  if(hasSanskritChars(label)) {
+    ctx.font=`600 11px ${FONT_FALLBACK}`;
+  } else {
+    ctx.font=`${FONT_FANTASY_BOLD} 11px ${FONT_FANTASY}`;
+  }
+  const tw=ctx.measureText(`[E] ${label}`).width+12;
   // Rounded bg
-  const bx=sx-tw/2, by=sy-12;
+  const bx=sx-tw/2, by=sy-10;
   ctx.fillStyle='rgba(0,0,0,0.75)';
-  roundRect(ctx,bx,by,tw,20,6);ctx.fill();
+  roundRect(ctx,bx,by,tw,18,5);ctx.fill();
   ctx.strokeStyle='#ffd700';ctx.lineWidth=1;
-  roundRect(ctx,bx,by,tw,20,6);ctx.stroke();
+  roundRect(ctx,bx,by,tw,18,5);ctx.stroke();
   ctx.fillStyle='#ffd700';
-  ctx.fillText(`[E] ${label}`,sx,sy+2);
+  ctx.fillText(`[E] ${label}`,sx,sy+3);
   ctx.textAlign='left';
 }
 
@@ -928,12 +948,18 @@ function renderHUD() {
   ctx.fillStyle=hg;ctx.fillRect(0,0,canvas.width,32);
 
   const loc=getLocationName(player.x,player.y);
-  ctx.fillStyle='#ffd700';ctx.font='bold 13px sans-serif';
+  ctx.fillStyle='#ffd700';
+  // Use fallback font if location name contains Sanskrit characters
+  if(hasSanskritChars(loc)) {
+    ctx.font=`600 13px ${FONT_FALLBACK}`;
+  } else {
+    ctx.font=`${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
+  }
   ctx.fillText(`📍 ${loc}`,12,19);
 
   // Dye progress — nice circles
   const dx=canvas.width-210;
-  ctx.fillStyle='#aaa';ctx.font='11px sans-serif';
+  ctx.fillStyle='#aaa';ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillText('Sacred Dyes:',dx,19);
   const dyes=[
     {id:'krmija_dye',c:'#dc143c',x:dx+84},
@@ -951,27 +977,26 @@ function renderHUD() {
       ctx.beginPath();ctx.arc(d.x,15,5,0,Math.PI*2);ctx.stroke();
     }
   }
-  ctx.fillStyle='#888';ctx.font='11px sans-serif';
+  ctx.fillStyle='#888';ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillText(`📖 ${discoveredWords.size}/${Object.keys(WORDS).length}`,dx+148,19);
 
   // Bottom bar
   const bg=ctx.createLinearGradient(0,canvas.height-24,0,canvas.height);
   bg.addColorStop(0,'transparent');bg.addColorStop(1,'rgba(0,0,0,0.5)');
   ctx.fillStyle=bg;ctx.fillRect(0,canvas.height-24,canvas.width,24);
-  ctx.fillStyle='#666';ctx.font='11px sans-serif';
+  ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillText('WASD: Move  ·  E: Interact  ·  I: Inventory  ·  L: Lexicon',12,canvas.height-7);
 
   // Quest panel
   if(flags.metGuru&&!flags.gameComplete) {
-    const qw=220,qh=86,qx=canvas.width-qw-6,qy=34;
+    const qw=180,qh=68,qx=canvas.width-qw-6,qy=26;
     ctx.fillStyle='rgba(10,10,30,0.75)';
-    roundRect(ctx,qx,qy,qw,qh,6);ctx.fill();
+    roundRect(ctx,qx,qy,qw,qh,4);ctx.fill();
     ctx.strokeStyle='rgba(255,215,0,0.3)';ctx.lineWidth=1;
-    roundRect(ctx,qx,qy,qw,qh,6);ctx.stroke();
-    ctx.fillStyle='#ffd700';ctx.font='bold 11px sans-serif';
-    ctx.fillText('⚔ Active Quests',qx+10,qy+16);
-    ctx.font='10px sans-serif';
-    let qyy=qy+32;
+    roundRect(ctx,qx,qy,qw,qh,4);ctx.stroke();
+    ctx.fillStyle='#ffd700';ctx.font=`${FONT_FANTASY_BOLD} 11px ${FONT_FANTASY}`;
+    ctx.fillText('⚔ Active Quests',qx+8,qy+14);
+    let qyy=qy+26;
     const quests=[
       {done:hasItem('krmija_dye'),name:'Kṛmija: Help Farmer Vrīhi',c:'#dc143c'},
       {done:hasItem('nila_dye'),name:'Nīla: Offering for Monk Bodhi',c:'#6a6aff'},
@@ -979,7 +1004,14 @@ function renderHUD() {
     ];
     for(const q of quests){
       ctx.fillStyle=q.done?'#6a6':'rgba(255,255,255,0.5)';
-      ctx.fillText(q.done?`✓ ${q.name.split(':')[0]} dye obtained`:`○ ${q.name}`,qx+10,qyy);
+      const questText = q.done?`✓ ${q.name.split(':')[0]} dye obtained`:`○ ${q.name}`;
+      // Use fallback font if quest text contains Sanskrit characters
+      if(hasSanskritChars(questText)) {
+        ctx.font=`10px ${FONT_FALLBACK}`;
+      } else {
+        ctx.font=`10px ${FONT_FANTASY}`;
+      }
+      ctx.fillText(questText,qx+10,qyy);
       if(!q.done){ctx.fillStyle=q.c+'60';ctx.fillRect(qx+4,qyy-8,3,10);}
       qyy+=16;
     }
@@ -1038,13 +1070,13 @@ function renderDialogueBox() {
   bgGrad.addColorStop(0,'rgba(16,14,38,0.96)');
   bgGrad.addColorStop(1,'rgba(10,10,24,0.98)');
   ctx.fillStyle=bgGrad;
-  roundRect(ctx,bx,by,bw,bh,12);ctx.fill();
+  roundRect(ctx,bx,by,bw,bh,8);ctx.fill();
   // Border
   ctx.strokeStyle='#ffd700';ctx.lineWidth=2;
-  roundRect(ctx,bx,by,bw,bh,12);ctx.stroke();
+  roundRect(ctx,bx,by,bw,bh,8);ctx.stroke();
   // Inner line
   ctx.strokeStyle='rgba(255,215,0,0.1)';ctx.lineWidth=1;
-  roundRect(ctx,bx+4,by+4,bw-8,bh-8,10);ctx.stroke();
+  roundRect(ctx,bx+4,by+4,bw-8,bh-8,6);ctx.stroke();
   // Corner accents
   ctx.fillStyle='#ffd700';
   ctx.fillRect(bx+8,by+8,14,2);ctx.fillRect(bx+8,by+8,2,14);
@@ -1058,7 +1090,7 @@ function renderDialogueBox() {
   let textY=by+38;
   if(ds.speaker){
     ctx.fillStyle=ds.speakerColor||'#ffd700';
-    ctx.font='bold 14px sans-serif';
+    ctx.font=`${FONT_FANTASY_BOLD} 15px ${FONT_FANTASY}`;
     ctx.fillText(ds.speaker,bx+24,by+24);
     const nw=ctx.measureText(ds.speaker).width;
     ctx.fillStyle='rgba(255,215,0,0.15)';
@@ -1068,17 +1100,17 @@ function renderDialogueBox() {
 
   // Rich text with typing
   const visText=richSubstr(ds.fullText,Math.floor(ds.charIndex));
-  ctx.font='17px serif';
-  drawRichText(ctx,visText,bx+24,textY,bw-48,24);
+  ctx.font=`18px ${FONT_FANTASY}`;
+  drawRichText(ctx,visText,bx+24,textY,bw-48,26);
 
   // Page indicator
-  ctx.fillStyle='#555';ctx.font='10px sans-serif';ctx.textAlign='right';
-  ctx.fillText(`${ds.index+1}/${ds.lines.length}`,bx+bw-16,by+bh-14);ctx.textAlign='left';
+  ctx.fillStyle='#555';ctx.font=`10px ${FONT_FANTASY}`;ctx.textAlign='right';
+  ctx.fillText(`${ds.index+1}/${ds.lines.length}`,bx+bw-16,by+bh-12);ctx.textAlign='left';
   // Continue prompt
   if(ds.charIndex>=ds.visLen){
     const a=0.5+0.5*Math.sin(time*4);
-    ctx.fillStyle=`rgba(255,215,0,${a})`;ctx.font='12px sans-serif';
-    ctx.fillText('▼ E to continue',bx+24,by+bh-14);
+    ctx.fillStyle=`rgba(255,215,0,${a})`;ctx.font=`12px ${FONT_FANTASY}`;
+    ctx.fillText('▼ E to continue',bx+24,by+bh-12);
   }
 }
 
@@ -1093,6 +1125,18 @@ function wrapText(ctx,text,x,y,maxW,lineH) {
 }
 
 function easeOutCubic(t){return 1-Math.pow(1-t,3);}
+
+// ─── FONT CONSTANTS ───
+const FONT_FANTASY = '"Optimus Princeps", "MedievalSharp", "Uncial Antiqua", "Cinzel", serif';
+const FONT_FANTASY_BOLD = '600'; // Semibold weight
+const FONT_FANTASY_ITALIC = 'italic';
+const FONT_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'; // For Sanskrit diacritics
+
+// ─── HELPER: Detect Sanskrit diacritics ───
+function hasSanskritChars(text) {
+  // Check for common Sanskrit diacritics: ā ī ū ṛ ṝ ḷ ḹ ē ō ṃ ḥ ś ṣ ṭ ḍ ṇ
+  return /[āīūṛṝḷḹēōṃḥśṣṭḍṇṅ]/u.test(text);
+}
 
 // ─── RICH TEXT SYSTEM ───
 // Markup: {g}gold{/}, {c}cyan{/}, {r}red{/}, {b}blue{/}, {o}orange{/}, {w}white{/}, {d}dim{/}, {p}purple{/}
@@ -1119,18 +1163,30 @@ function drawRichText(ctx,raw,x,y,mw,lh,dc){
     else if(m[3])segs.push({t:m[3],c:col});
   }
   let cx=x,cy=y;
+  const baseFont = ctx.font; // Save current font
   for(const s of segs){
     if(s.t==='\n'){cx=x;cy+=lh;continue;}
     ctx.fillStyle=s.c;
     const parts=s.t.split(/( )/);
     for(const p of parts){
       if(!p)continue;
+      // Use fallback font if text contains Sanskrit characters
+      if(hasSanskritChars(p)) {
+        const sizeMatch = baseFont.match(/(\d+)px/);
+        const size = sizeMatch ? sizeMatch[1] : '18';
+        const weightMatch = baseFont.match(/(\d+|bold|normal)/);
+        const weight = weightMatch ? weightMatch[1] : 'normal';
+        ctx.font = `${weight} ${size}px ${FONT_FALLBACK}`;
+      } else {
+        ctx.font = baseFont; // Restore original font
+      }
       const w=ctx.measureText(p).width;
       if(cx+w>x+mw&&cx>x&&p.trim()){cx=x;cy+=lh;}
       ctx.fillText(p,cx,cy);
       cx+=w;
     }
   }
+  ctx.font = baseFont; // Restore font at end
 }
 
 // ─── WORD POPUP ───
@@ -1140,8 +1196,10 @@ function renderWordPopup() {
   const slide=easeOutCubic(Math.min(1,wordPopup.slide));
   const fadeOut=Math.min(1,wordPopup.timer*2);
   const alpha=slide*fadeOut;
+
   const pw=440,ph=80;
-  const px=(canvas.width-pw)/2, py=34-20*(1-slide);
+  const px=canvas.width/2-pw/2;
+  const py=32+10*(1-slide);
 
   ctx.globalAlpha=alpha;
   // Glow behind
@@ -1151,15 +1209,21 @@ function renderWordPopup() {
   ctx.fillStyle=grad;ctx.fillRect(px-10,py-2,pw+20,ph+4);
   // Box
   ctx.fillStyle='rgba(12,12,30,0.94)';
-  roundRect(ctx,px,py,pw,ph,8);ctx.fill();
-  ctx.strokeStyle='#ffd700';ctx.lineWidth=1.5;
-  roundRect(ctx,px,py,pw,ph,8);ctx.stroke();
+  roundRect(ctx,px,py,pw,ph,6);ctx.fill();
+  ctx.strokeStyle='#ffd700';ctx.lineWidth=1;
+  roundRect(ctx,px,py,pw,ph,6);ctx.stroke();
   // Content
-  ctx.fillStyle='#ffd700';ctx.font='bold 14px sans-serif';
+  ctx.fillStyle='#ffd700';
+  // Sanskrit word uses fallback font
+  if(hasSanskritChars(w.s)) {
+    ctx.font=`600 14px ${FONT_FALLBACK}`;
+  } else {
+    ctx.font=`${FONT_FANTASY_BOLD} 14px ${FONT_FANTASY}`;
+  }
   ctx.fillText(`✦ Word Discovered: ${w.s}`,px+14,py+22);
-  ctx.fillStyle='#4fc3f7';ctx.font='12px sans-serif';
+  ctx.fillStyle='#4fc3f7';ctx.font=`12px ${FONT_FANTASY}`;
   ctx.fillText(`→ English: "${w.en}"${w.zh?'  ·  Chinese: '+w.zh:''}`,px+14,py+42);
-  ctx.fillStyle='#aaa';ctx.font='11px sans-serif';
+  ctx.fillStyle='#aaa';ctx.font=`11px ${FONT_FANTASY}`;
   const note=w.note.length>68?w.note.substring(0,68)+'…':w.note;
   ctx.fillText(note,px+14,py+60);
   ctx.globalAlpha=1;
@@ -1171,17 +1235,17 @@ function renderInventoryPanel() {
   // Backdrop
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,canvas.width,canvas.height);
   // Panel
-  ctx.fillStyle='rgba(12,12,30,0.96)';roundRect(ctx,px,py,pw,ph,10);ctx.fill();
-  ctx.strokeStyle='#ffd700';ctx.lineWidth=2;roundRect(ctx,px,py,pw,ph,10);ctx.stroke();
+  ctx.fillStyle='rgba(12,12,30,0.96)';roundRect(ctx,px,py,pw,ph,6);ctx.fill();
+  ctx.strokeStyle='#ffd700';ctx.lineWidth=1;roundRect(ctx,px,py,pw,ph,6);ctx.stroke();
   // Header
   ctx.fillStyle='rgba(255,215,0,0.1)';ctx.fillRect(px+1,py+1,pw-2,36);
-  ctx.fillStyle='#ffd700';ctx.font='bold 16px sans-serif';
+  ctx.fillStyle='#ffd700';ctx.font=`${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
   ctx.fillText('🎒 Inventory',px+16,py+25);
-  ctx.fillStyle='#666';ctx.font='11px sans-serif';
+  ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillText('[I] close',px+pw-70,py+25);
   if(inventory.length===0){
-    ctx.fillStyle='#555';ctx.font='italic 14px serif';
-    ctx.fillText('Your pack is empty. Explore and collect items!',px+20,py+80);
+    ctx.fillStyle='#555';ctx.font=`${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
+    ctx.fillText('Your pack is empty. Explore and collect items.',px+20,py+80);
     return;
   }
   let iy=py+50;
@@ -1189,17 +1253,29 @@ function renderInventoryPanel() {
     const item=ITEMS[itemId];if(!item)continue;
     // Item row bg
     ctx.fillStyle='rgba(255,255,255,0.03)';
-    roundRect(ctx,px+10,iy-6,pw-20,32,4);ctx.fill();
+    roundRect(ctx,px+8,iy-4,pw-16,28,3);ctx.fill();
     // Color dot
     ctx.fillStyle=item.color;
-    ctx.beginPath();ctx.arc(px+28,iy+8,6,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(px+20,iy+8,4,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;
-    ctx.beginPath();ctx.arc(px+28,iy+8,7,0,Math.PI*2);ctx.stroke();
+    ctx.beginPath();ctx.arc(px+20,iy+8,5,0,Math.PI*2);ctx.stroke();
     // Text
-    ctx.fillStyle='#e8e6e3';ctx.font='bold 13px sans-serif';
-    ctx.fillText(item.name,px+44,iy+6);
-    ctx.fillStyle='#888';ctx.font='11px sans-serif';
-    ctx.fillText(item.desc,px+44,iy+20);
+    ctx.fillStyle='#e8e6e3';
+    // Use fallback font if item name contains Sanskrit characters
+    if(hasSanskritChars(item.name)) {
+      ctx.font=`600 13px ${FONT_FALLBACK}`;
+    } else {
+      ctx.font=`${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
+    }
+    ctx.fillText(item.name,px+32,iy+6);
+    ctx.fillStyle='#888';
+    // Use fallback font if item description contains Sanskrit characters
+    if(hasSanskritChars(item.desc)) {
+      ctx.font=`11px ${FONT_FALLBACK}`;
+    } else {
+      ctx.font=`11px ${FONT_FANTASY}`;
+    }
+    ctx.fillText(item.desc,px+32,iy+20);
     iy+=36;
   }
 }
@@ -1208,29 +1284,35 @@ function renderInventoryPanel() {
 function renderLexiconPanel() {
   const pw=620,ph=460,px=(canvas.width-pw)/2,py=(canvas.height-ph)/2;
   ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='rgba(12,12,30,0.96)';roundRect(ctx,px,py,pw,ph,10);ctx.fill();
-  ctx.strokeStyle='#ffd700';ctx.lineWidth=2;roundRect(ctx,px,py,pw,ph,10);ctx.stroke();
+  ctx.fillStyle='rgba(12,12,30,0.96)';roundRect(ctx,px,py,pw,ph,6);ctx.fill();
+  ctx.strokeStyle='#ffd700';ctx.lineWidth=1;roundRect(ctx,px,py,pw,ph,6);ctx.stroke();
   // Header
-  ctx.fillStyle='rgba(255,215,0,0.1)';ctx.fillRect(px+1,py+1,pw-2,36);
-  ctx.fillStyle='#ffd700';ctx.font='bold 16px sans-serif';
+  ctx.fillStyle='rgba(255,215,0,0.1)';ctx.fillRect(px+1,py+1,pw-2,28);
+  ctx.fillStyle='#ffd700';ctx.font=`${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
   ctx.fillText(`📖 Lexicon (${discoveredWords.size}/${Object.keys(WORDS).length})`,px+16,py+25);
-  ctx.fillStyle='#666';ctx.font='11px sans-serif';
+  ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillText('[L] close',px+pw-70,py+25);
   if(discoveredWords.size===0){
-    ctx.fillStyle='#555';ctx.font='italic 14px serif';
-    ctx.fillText('No words discovered yet. Talk to people and explore!',px+20,py+80);
+    ctx.fillStyle='#555';ctx.font=`${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
+    ctx.fillText('No words discovered yet. Talk to people and explore.',px+20,py+80);
     return;
   }
-  let iy=py+52;const cols=2,colW=(pw-40)/cols;let col=0;
+  let iy=py+40;const cols=2,colW=(pw-24)/cols;let col=0;
   for(const wId of discoveredWords){
     const w=WORDS[wId];if(!w)continue;
-    const cx=px+20+col*colW;
+    const cx=px+12+col*colW;
     // Row bg
     ctx.fillStyle='rgba(255,255,255,0.02)';
-    ctx.fillRect(cx-4,iy-12,colW-8,30);
-    ctx.fillStyle='#ffd700';ctx.font='bold 12px sans-serif';
+    ctx.fillRect(cx-3,iy-10,colW-6,24);
+    ctx.fillStyle='#ffd700';
+    // Sanskrit word uses fallback font
+    if(hasSanskritChars(w.s)) {
+      ctx.font=`600 12px ${FONT_FALLBACK}`;
+    } else {
+      ctx.font=`${FONT_FANTASY_BOLD} 12px ${FONT_FANTASY}`;
+    }
     ctx.fillText(w.s,cx,iy);
-    ctx.fillStyle='#4fc3f7';ctx.font='11px sans-serif';
+    ctx.fillStyle='#4fc3f7';ctx.font=`11px ${FONT_FANTASY}`;
     ctx.fillText(`→ ${w.en}${w.zh?' · '+w.zh:''}`,cx,iy+14);
     col++;if(col>=cols){col=0;iy+=34;}
   }

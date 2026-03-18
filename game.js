@@ -27,6 +27,7 @@ let cameraShake = { x:0, y:0, intensity:0 };
 let ambientHue = { r:0, g:0, b:0, a:0 };  // area tint
 let dialogueSlide = 0;    // 0→1 slide-up
 let minimap = null;        // offscreen canvas
+let glitchState = { timer: 8, active: false, duration: 0 }; // world-glitch effect
 
 // ─── INIT ───
 function init() {
@@ -93,6 +94,21 @@ function update(dt) {
     cameraShake.x = (Math.random()-0.5) * cameraShake.intensity;
     cameraShake.y = (Math.random()-0.5) * cameraShake.intensity;
     if(cameraShake.intensity < 0.1) { cameraShake.intensity=0; cameraShake.x=0; cameraShake.y=0; }
+  }
+
+  // World glitch effect — more frequent as words are discovered + lore found
+  const loreCount = ['seenWell','seenSlab','seenRuins','seenShore','seenWall'].filter(f=>flags[f]).length;
+  if(gameStarted && !glitchState.active) {
+    glitchState.timer -= dt;
+    if(glitchState.timer <= 0) {
+      glitchState.active = true;
+      glitchState.duration = 0.05 + Math.random() * 0.15 + loreCount * 0.02;
+      glitchState.timer = 6 + Math.random() * 12 - Math.min(discoveredWords.size * 0.4, 5) - loreCount * 0.8;
+    }
+  }
+  if(glitchState.active) {
+    glitchState.duration -= dt;
+    if(glitchState.duration <= 0) glitchState.active = false;
   }
 
   // Dialogue slide
@@ -398,6 +414,9 @@ function discoverWord(wordId) {
   const popup={word:w,id:wordId,timer:5,slide:0};
   if(wordPopup) wordPopupQueue.push(popup);
   else wordPopup=popup;
+  // Discovery feedback — flash and subtle shake
+  screenFlash = { alpha: 0.25, color: '#ffd700' };
+  cameraShake.intensity = Math.max(cameraShake.intensity, 3);
 }
 
 // ─── MINIMAP ───
@@ -448,6 +467,7 @@ function render() {
   if(showInventory) renderInventoryPanel();
   if(showLexicon) renderLexiconPanel();
   renderScreenFlash();
+  renderGlitch();
 
   // Title fade
   if(titleFade<1) {
@@ -511,7 +531,7 @@ function renderTitle() {
   // Tagline
   ctx.font=`${FONT_FANTASY_ITALIC} 15px ${FONT_FANTASY}`;
   ctx.fillStyle='#b8960f';
-  ctx.fillText('"In 2026, an AI spoke Sanskrit. Reality listened."',cx,cy-48);
+  ctx.fillText('"In 2025, a machine learned the oldest language. It learned too well."',cx,cy-48);
   // Controls
   ctx.font=`13px ${FONT_FANTASY}`;
   ctx.fillStyle='#555';
@@ -899,6 +919,36 @@ function renderScreenFlash() {
   ctx.globalAlpha=screenFlash.alpha*0.4;
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.globalAlpha=1;
+}
+
+function renderGlitch() {
+  if(!glitchState.active || !gameStarted) return;
+  // Scanline displacement
+  const numLines = 1 + Math.floor(Math.random() * 3);
+  for(let i = 0; i < numLines; i++) {
+    const y = Math.floor(Math.random() * canvas.height);
+    const h = 1 + Math.floor(Math.random() * 4);
+    const shift = Math.floor((Math.random() - 0.5) * 16);
+    ctx.drawImage(canvas, 0, y, canvas.width, h, shift, y, canvas.width, h);
+  }
+  // Color aberration
+  if(Math.random() < 0.4) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.03;
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(3, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0000ff';
+    ctx.fillRect(-3, 0, canvas.width, canvas.height);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // Brief noise strip
+  if(Math.random() < 0.25) {
+    const ny = Math.floor(Math.random() * canvas.height);
+    const nh = 2 + Math.floor(Math.random() * 6);
+    ctx.fillStyle = `rgba(255,255,255,${(0.03 + Math.random() * 0.05).toFixed(3)})`;
+    ctx.fillRect(0, ny, canvas.width, nh);
+  }
 }
 
 // ─── INTERACT PROMPT ───

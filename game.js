@@ -70,35 +70,60 @@ const INTRO_ETYM = {
   sister: 'svasar- → The word \'sister\' has changed less in 5,000 years than most words change in 100. Cognate across nearly all Indo-European languages. Sister derives directly from this ancient word for female sibling.',
 };
 
+const INTRO_SAVE_KEY = 'mantra_intro_complete';
+
+function loadIntroComplete() {
+  try { return localStorage.getItem(INTRO_SAVE_KEY) === '1'; } catch { return false; }
+}
+
+function saveIntroComplete() {
+  try { localStorage.setItem(INTRO_SAVE_KEY, '1'); } catch { /* file:// or private mode */ }
+}
+
+function shouldPlayIntro(urlParams) {
+  if (urlParams.has('skipIntro')) return false;
+  // Full open world by default; add ?intro to play the Family Shrine first.
+  return urlParams.has('intro');
+}
+
+function beginIntroMap() {
+  map = generateIntroMap();
+  introActive = true;
+  mapW = INTRO_MAP_W;
+  mapH = INTRO_MAP_H;
+  player.x = INTRO_SPAWN.x;
+  player.y = INTRO_SPAWN.y;
+  player.dir = -Math.PI / 2;
+  minimap = null;
+}
+
+function beginMainWorld() {
+  map = mainMap;
+  introActive = false;
+  mapW = MAP_W;
+  mapH = MAP_H;
+  buildMinimap();
+}
+
 // ─── INIT ───
 function init() {
   canvas = document.getElementById('game-canvas');
   ctx = canvas.getContext('2d');
   resize();
   window.addEventListener('resize', resize);
-  window.addEventListener('keydown', e => { keys[e.code]=true; if(!e.metaKey&&!e.ctrlKey) e.preventDefault(); });
+  window.addEventListener('keydown', e => {
+    keys[e.code]=true;
+    // Keep arrow keys / space from scrolling the page while playing.
+    if (!e.metaKey && !e.ctrlKey && gameStarted) e.preventDefault();
+  });
   window.addEventListener('keyup', e => { keys[e.code]=false; });
   setupTouchControls();
   const urlParams = new URLSearchParams(location.search);
-  if (urlParams.has('skipIntro')) flags.introComplete = true;
   mainMap = generateMap();
   groundItemState = GROUND_ITEMS.map(()=>false);
-  if (flags.introComplete) {
-    map = mainMap;
-    introActive = false;
-    mapW = MAP_W;
-    mapH = MAP_H;
-    buildMinimap();
-  } else {
-    map = generateIntroMap();
-    introActive = true;
-    mapW = INTRO_MAP_W;
-    mapH = INTRO_MAP_H;
-    player.x = INTRO_SPAWN.x;
-    player.y = INTRO_SPAWN.y;
-    player.dir = -Math.PI / 2;
-    minimap = null;
-  }
+  flags.introComplete = !shouldPlayIntro(urlParams);
+  if (flags.introComplete) beginMainWorld();
+  else beginIntroMap();
   // Seed title particles
   for(let i=0;i<80;i++) particles.push(makeTitleParticle());
   if (urlParams.has('play')) {
@@ -195,6 +220,7 @@ function update(dt) {
       titleFade = 0;
       particles = [];
     }
+    if (justPressed('Escape') && introActive) skipIntroToWorld();
     return;
   }
 
@@ -251,7 +277,7 @@ function update(dt) {
   }
 
   if (introActive) {
-    updateArea();
+    if (justPressed('Escape')) { skipIntroToWorld(); updateParticles(dt); return; }
     updateIntro(dt);
     updateParticles(dt);
     return;
@@ -685,7 +711,7 @@ function renderTitle() {
   ctx.font=`13px ${FONT_FANTASY}`;
   ctx.fillStyle='#555';
   ctx.fillText('WASD or touch to move  ·  E or tap to interact  ·  I inventory  ·  L lexicon',cx,cy-12);
-  ctx.fillText('Add ?play to URL to skip this screen',cx,cy+4);
+  ctx.fillText('?play skips title  ·  Esc skips Family Shrine (after you begin)',cx,cy+4);
   // Pulsing prompt
   const a=0.5+0.5*Math.sin(time*3);
   ctx.globalAlpha=a;
@@ -704,9 +730,11 @@ function renderMap() {
   const sc=Math.floor(camera.x/TILE_SIZE)-1, sr=Math.floor(camera.y/TILE_SIZE)-1;
   const ec=Math.ceil((camera.x+canvas.width)/TILE_SIZE)+1, er=Math.ceil((camera.y+canvas.height)/TILE_SIZE)+1;
   for(let row=sr;row<=er;row++) for(let col=sc;col<=ec;col++) {
-    if(col<0||col>=MAP_W||row<0||row>=MAP_H) continue;
+    if(col<0||col>=mapW||row<0||row>=mapH) continue;
+    const tile=map[row]?.[col];
+    if(tile===undefined) continue;
     const sx=Math.floor(col*TILE_SIZE-camera.x), sy=Math.floor(row*TILE_SIZE-camera.y);
-    drawTile(map[row][col],sx,sy,col,row);
+    drawTile(tile,sx,sy,col,row);
   }
 }
 
@@ -1767,19 +1795,22 @@ function updateIntro(dt) {
   camera.y = Math.max(0, Math.min(mapH * TILE_SIZE - canvas.height, camera.y));
 }
 
-function completeIntro() {
+function skipIntroToWorld() {
   if (!introActive) return;
   introActive = false;
   introMsg = null;
   quizState = null;
   flags.introComplete = true;
-  map = mainMap;
-  mapW = MAP_W;
-  mapH = MAP_H;
+  saveIntroComplete();
+  beginMainWorld();
   player.x = INTRO_WORLD_EXIT.x;
   player.y = INTRO_WORLD_EXIT.y;
   player.dir = Math.PI / 2;
-  buildMinimap();
+}
+
+function completeIntro() {
+  if (!introActive) return;
+  skipIntroToWorld();
   startDialogue({
     lines: [
       'The stone door grinds open. {w}Sunlight{/} — real sunlight — spills across the threshold.',

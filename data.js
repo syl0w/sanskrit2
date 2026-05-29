@@ -50,6 +50,9 @@ const WORDS = {
   karma:{ s:"karman", en:"karma", zh:"", note:"'Action.' Every deed sends ripples. One of the most recognized Sanskrit words on Earth — and you already use it." },
   lut:{ s:"lūṭ", en:"loot", zh:"", note:"'To plunder.' The Hindi/Sanskrit root entered English during the colonial period as 'loot.' Some words arrive by force." },
   bhrata:{ s:"bhrātṛ", en:"brother", zh:"", note:"Sanskrit bhrātṛ, Latin frāter, English 'brother.' The deepest human bond, encoded in the oldest words we have." },
+  matri:{ s:"mātṛ", en:"mother", zh:"", note:"English 'mother' and Sanskrit 'mātṛ' share the exact same 5,000-year-old root." },
+  pitri:{ s:"pitṛ", en:"father", zh:"", note:"Nearly identical across every Indo-European language from Iceland to India." },
+  svasar:{ s:"svasṛ", en:"sister", zh:"", note:"The word 'sister' has changed less in 5,000 years than most words change in 100." },
   rajya:{ s:"rājya", en:"raj (kingdom)", zh:"", note:"'Kingdom.' The British 'Raj' used a Sanskrit word to name their rule over India. Words outlive empires." },
   capayati:{ s:"campayati", en:"shampoo", zh:"", note:"'To press, to knead' — from the champō head massage. A relaxation technique that became a bottle on a shelf." },
   simhapura:{ s:"siṃhapura", en:"Singapore", zh:"新加坡", note:"'Lion City' — siṃha (lion) + pura (city). Singapore's name is pure Sanskrit. Chinese: 新加坡 (Xīnjiāpō)." },
@@ -627,4 +630,63 @@ function placeBuilding(map,x,y,w,h,flr) {
     else map[y+dy][x+dx]=flr;
   }
   map[y+h-1][x+Math.floor(w/2)]=T.DOOR;
+}
+
+// === FAMILY SHRINE INTRO (inner chamber before open world) ===
+const INTRO_MAP_W = 20;
+const INTRO_MAP_H = 18;
+const INTRO_SPAWN = { x: 10.5, y: 15.2 };
+const INTRO_WORLD_EXIT = { x: 40.5, y: 33.8 };
+
+const INTRO_LAYOUT = {
+  mother: { x: 10, y: 12 },
+  quilt: { x: 4, y: 14, id: 'quilt' },
+  matrix: { x: 16, y: 13, id: 'matrix' },
+  mammal: { x: 7, y: 15, id: 'mammal' },
+  brother: { homeX: 5, homeY: 9, targetX: 5, targetY: 4 },
+  sister: { homeX: 14, homeY: 9, targetX: 14, targetY: 4 },
+  father: { x: 10, y: 3 },
+  doorNorth: { x: 10, y: 10 },
+  exit: { x: 10, y: 1 },
+};
+
+const INTRO_BONUS_TEXT = {
+  quilt: "Gives us 'maternity', 'matriarchy', and surprisingly...",
+  matrix: "Matrix comes from the same root as 'mother'. It originally meant 'womb'—the place where new life is formed. The mathematical meaning came later.",
+  mammal: "Mammal comes from the same root as 'mother'. It literally means 'an animal that nurses its young with milk'.",
+};
+
+function generateIntroMap() {
+  const m = [];
+  for (let y = 0; y < INTRO_MAP_H; y++) {
+    m[y] = [];
+    for (let x = 0; x < INTRO_MAP_W; x++) m[y][x] = T.WALL;
+  }
+  // Room 1 — mother chamber
+  clearArea(m, 2, 11, 16, 6, T.FLOOR);
+  // Room 2 — family chamber
+  clearArea(m, 1, 3, 18, 7, T.FLOOR);
+  // Divider (closed until mother puzzle)
+  m[INTRO_LAYOUT.doorNorth.y][INTRO_LAYOUT.doorNorth.x] = T.WALL;
+  m[INTRO_LAYOUT.doorNorth.y - 1][INTRO_LAYOUT.doorNorth.x] = T.WALL;
+  // Exit to world (closed until father puzzle)
+  m[INTRO_LAYOUT.exit.y][INTRO_LAYOUT.exit.x] = T.WALL;
+  m[INTRO_LAYOUT.exit.y + 1][INTRO_LAYOUT.exit.x] = T.FLOOR;
+  // Alcove pillars
+  m[11][2] = T.WALL;
+  m[9][2] = T.WALL;
+  return m;
+}
+
+function applyIntroDoorNorth(map, open) {
+  const t = open ? T.FLOOR : T.WALL;
+  const d = INTRO_LAYOUT.doorNorth;
+  map[d.y][d.x] = t;
+  map[d.y - 1][d.x] = t;
+}
+
+function applyIntroExit(map, open) {
+  const e = INTRO_LAYOUT.exit;
+  map[e.y][e.x] = open ? T.PATH : T.WALL;
+  map[e.y + 1][e.x] = T.FLOOR;
 }

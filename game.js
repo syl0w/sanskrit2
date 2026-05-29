@@ -28,6 +28,47 @@ let ambientHue = { r:0, g:0, b:0, a:0 };  // area tint
 let dialogueSlide = 0;    // 0→1 slide-up
 let minimap = null;        // offscreen canvas
 let glitchState = { timer: 8, active: false, duration: 0 }; // world-glitch effect
+let touch = { active: false, worldX: 0, worldY: 0, tapX: 0, tapY: 0, dx: 0, dy: 0 };
+let mainMap = null;
+let mapW = MAP_W, mapH = MAP_H;
+let introActive = false;
+let quizState = null;
+let introMsg = null;
+
+const intro = {
+  motherDone: false,
+  doorNorthOpen: false,
+  brotherDone: false,
+  sisterDone: false,
+  fatherVisible: false,
+  fatherDone: false,
+  exitOpen: false,
+  bonuses: { quilt: false, matrix: false, mammal: false },
+  brother: { x: 5, y: 9, sliding: false, t: 0 },
+  sister: { x: 14, y: 9, sliding: false, t: 0 },
+};
+
+const INTRO_QUIZ = {
+  mother: {
+    q: "What is the Sanskrit root for the English word 'mother'?",
+    opts: ['mātṛ-', 'pitṛ-', 'bhrātar-'],
+    ok: ['mātṛ-'],
+    etym: "English 'mother' and Sanskrit 'mātṛ' share the exact same 5,000-year-old root.",
+    word: 'matri',
+  },
+  father: {
+    q: "Sanskrit 'pitṛ' is cognate with which English word?",
+    opts: ['Father', 'Mother', 'Brother'],
+    ok: ['Father'],
+    etym: "This word is nearly identical across every Indo-European language from Iceland to India.",
+    word: 'pitri',
+  },
+};
+
+const INTRO_ETYM = {
+  brother: "bhrātar- → From *bhrā- 'to carry', as brothers carry each other's burdens.",
+  sister: 'svasar- → The word \'sister\' has changed less in 5,000 years than most words change in 100. Cognate across nearly all Indo-European languages. Sister derives directly from this ancient word for female sibling.',
+};
 
 // ─── INIT ───
 function init() {
@@ -37,12 +78,87 @@ function init() {
   window.addEventListener('resize', resize);
   window.addEventListener('keydown', e => { keys[e.code]=true; if(!e.metaKey&&!e.ctrlKey) e.preventDefault(); });
   window.addEventListener('keyup', e => { keys[e.code]=false; });
-  map = generateMap();
+  setupTouchControls();
+  const urlParams = new URLSearchParams(location.search);
+  if (urlParams.has('skipIntro')) flags.introComplete = true;
+  mainMap = generateMap();
   groundItemState = GROUND_ITEMS.map(()=>false);
-  buildMinimap();
+  if (flags.introComplete) {
+    map = mainMap;
+    introActive = false;
+    mapW = MAP_W;
+    mapH = MAP_H;
+    buildMinimap();
+  } else {
+    map = generateIntroMap();
+    introActive = true;
+    mapW = INTRO_MAP_W;
+    mapH = INTRO_MAP_H;
+    player.x = INTRO_SPAWN.x;
+    player.y = INTRO_SPAWN.y;
+    player.dir = -Math.PI / 2;
+    minimap = null;
+  }
   // Seed title particles
   for(let i=0;i<80;i++) particles.push(makeTitleParticle());
+  if (urlParams.has('play')) {
+    gameStarted = true;
+    titleFade = 1;
+    particles = [];
+  }
   gameLoop(performance.now());
+}
+
+function setupTouchControls() {
+  const toWorld = (clientX, clientY) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (clientY - rect.top) * (canvas.height / rect.height);
+    return { x: sx + camera.x, y: sy + camera.y };
+  };
+
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    touch.tapX = t.clientX;
+    touch.tapY = t.clientY;
+    touch.active = true;
+    const w = toWorld(t.clientX, t.clientY);
+    touch.worldX = w.x;
+    touch.worldY = w.y;
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const w = toWorld(t.clientX, t.clientY);
+    touch.worldX = w.x;
+    touch.worldY = w.y;
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', e => {
+    e.preventDefault();
+    const t = e.changedTouches[0];
+    const moved = Math.hypot(t.clientX - touch.tapX, t.clientY - touch.tapY);
+    touch.active = false;
+    if (moved < 18 && gameStarted && !dialogueState && !showInventory && !showLexicon && !quizState && !introMsg) {
+      tryInteract();
+    }
+  }, { passive: false });
+}
+
+function applyTouchMovement() {
+  touch.dx = 0;
+  touch.dy = 0;
+  if (!touch.active || !gameStarted || dialogueState || showInventory || showLexicon || quizState || introMsg) return;
+  const px = player.x * TILE_SIZE + TILE_SIZE / 2;
+  const py = player.y * TILE_SIZE + TILE_SIZE / 2;
+  const dx = touch.worldX - px;
+  const dy = touch.worldY - py;
+  const len = Math.hypot(dx, dy);
+  if (len < 12) return;
+  touch.dx = dx / len;
+  touch.dy = dy / len;
 }
 
 function resize() {
@@ -124,17 +240,40 @@ function update(dt) {
   // Dialogue
   if(dialogueState) { updateDialogue(); updateParticles(dt); return; }
 
+  if (quizState || introMsg) {
+    if (quizState) updateQuizKeys();
+    if (introMsg) {
+      introMsg.timer -= dt;
+      if (introMsg.timer <= 0) introMsg = null;
+    }
+    updateParticles(dt);
+    return;
+  }
+
+  if (introActive) {
+    updateArea();
+    updateIntro(dt);
+    updateParticles(dt);
+    return;
+  }
+
   // Panels
   if(justPressed('KeyI')||justPressed('Tab')) { showInventory=!showInventory; showLexicon=false; }
   if(justPressed('KeyL')) { showLexicon=!showLexicon; showInventory=false; }
   if(showInventory||showLexicon) { if(justPressed('Escape')) { showInventory=false; showLexicon=false; } updateParticles(dt); return; }
 
   // Movement
+  applyTouchMovement();
   let dx=0,dy=0;
-  if(isDown('KeyW')||isDown('ArrowUp'))    dy=-1;
-  if(isDown('KeyS')||isDown('ArrowDown'))  dy=1;
-  if(isDown('KeyA')||isDown('ArrowLeft'))  dx=-1;
-  if(isDown('KeyD')||isDown('ArrowRight')) dx=1;
+  if(touch.active && (touch.dx || touch.dy)) {
+    dx = touch.dx;
+    dy = touch.dy;
+  } else {
+    if(isDown('KeyW')||isDown('ArrowUp'))    dy=-1;
+    if(isDown('KeyS')||isDown('ArrowDown'))  dy=1;
+    if(isDown('KeyA')||isDown('ArrowLeft'))  dx=-1;
+    if(isDown('KeyD')||isDown('ArrowRight')) dx=1;
+  }
   if(dx!==0||dy!==0) {
     const len=Math.sqrt(dx*dx+dy*dy); dx/=len; dy/=len;
     const spd=player.speed*dt;
@@ -162,8 +301,8 @@ function update(dt) {
   const tx=player.x*TILE_SIZE-canvas.width/2, ty=player.y*TILE_SIZE-canvas.height/2;
   camera.x+=(tx-camera.x)*0.1;
   camera.y+=(ty-camera.y)*0.1;
-  camera.x=Math.max(0,Math.min(MAP_W*TILE_SIZE-canvas.width,camera.x));
-  camera.y=Math.max(0,Math.min(MAP_H*TILE_SIZE-canvas.height,camera.y));
+  camera.x=Math.max(0,Math.min(mapW*TILE_SIZE-canvas.width,camera.x));
+  camera.y=Math.max(0,Math.min(mapH*TILE_SIZE-canvas.height,camera.y));
 
   // Word popup
   if(wordPopup) {
@@ -182,11 +321,12 @@ function update(dt) {
 
 // ─── AREA ATMOSPHERE ───
 function updateArea() {
-  const a = getLocationName(player.x,player.y);
+  const a = introActive ? 'Family Shrine' : getLocationName(player.x,player.y);
   if(a!==currentArea) currentArea=a;
   // Smooth tint lerp
   let tr=0,tg=0,tb=0,ta=0;
-  if(currentArea.includes('Jaṅgala'))        { tr=0;tg=20;tb=0;ta=0.12; }
+  if(currentArea.includes('Shrine'))         { tr=15;tg=10;tb=5;ta=0.1; }
+  else if(currentArea.includes('Jaṅgala'))        { tr=0;tg=20;tb=0;ta=0.12; }
   else if(currentArea.includes('Monastery')) { tr=20;tg=15;tb=0;ta=0.08; }
   else if(currentArea.includes('Lake'))      { tr=0;tg=5;tb=25;ta=0.08; }
   else if(currentArea.includes('Sumeru'))    { tr=10;tg=10;tb=20;ta=0.1; }
@@ -301,7 +441,8 @@ function renderParticles() {
 
 // ─── COLLISION ───
 function isSolid(tx,ty) {
-  if(tx<0||ty<0||tx>=MAP_W||ty>=MAP_H) return true;
+  if(tx<0||ty<0||tx>=mapW||ty>=mapH) return true;
+  if (introActive && introStatueBlocks(tx, ty)) return true;
   return SOLID.has(map[ty][tx]);
 }
 function canMoveTo(x,y) {
@@ -312,6 +453,7 @@ function canMoveTo(x,y) {
 
 // ─── INTERACTION ───
 function tryInteract() {
+  if (introActive) { tryIntroInteract(); return; }
   const nearby=getNearby();
   if(!nearby) return;
   if(nearby.type==='npc') {
@@ -332,6 +474,7 @@ function tryInteract() {
 }
 
 function getNearby() {
+  if (introActive) return getIntroNearby();
   let best=null,bestDist=2.0;
   for(const npc of NPCS) {
     const d=dist(player.x,player.y,npc.x+0.5,npc.y+0.5);
@@ -448,9 +591,13 @@ function render() {
   ctx.translate(-cameraShake.x,-cameraShake.y);
 
   renderMap();
-  renderGroundItems();
-  renderInteractPoints();
-  renderNPCs();
+  if (introActive) {
+    renderIntroScene();
+  } else {
+    renderGroundItems();
+    renderInteractPoints();
+    renderNPCs();
+  }
   renderPlayer();
 
   ctx.restore();
@@ -464,10 +611,12 @@ function render() {
   renderMinimap();
   renderDialogueBox();
   renderWordPopup();
+  renderIntroMessage();
+  renderQuizOverlay();
   if(showInventory) renderInventoryPanel();
   if(showLexicon) renderLexiconPanel();
   renderScreenFlash();
-  renderGlitch();
+  if (!introActive) renderGlitch();
 
   // Title fade
   if(titleFade<1) {
@@ -535,7 +684,8 @@ function renderTitle() {
   // Controls
   ctx.font=`13px ${FONT_FANTASY}`;
   ctx.fillStyle='#555';
-  ctx.fillText('WASD  ·  E to interact  ·  I inventory  ·  L lexicon',cx,cy-12);
+  ctx.fillText('WASD or touch to move  ·  E or tap to interact  ·  I inventory  ·  L lexicon',cx,cy-12);
+  ctx.fillText('Add ?play to URL to skip this screen',cx,cy+4);
   // Pulsing prompt
   const a=0.5+0.5*Math.sin(time*3);
   ctx.globalAlpha=a;
@@ -953,12 +1103,18 @@ function renderGlitch() {
 
 // ─── INTERACT PROMPT ───
 function renderInteractPrompt() {
-  if(dialogueState)return;
+  if(dialogueState||quizState||introMsg)return;
   const nearby=getNearby();
   if(!nearby)return;
   let tx,ty,label;
   if(nearby.type==='npc'){tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
   else if(nearby.type==='item'){const it=ITEMS[nearby.target.itemId];tx=nearby.target.x;ty=nearby.target.y;label=it?it.name:'Item';}
+  else if(nearby.type==='mother'){tx=INTRO_LAYOUT.mother.x;ty=INTRO_LAYOUT.mother.y;label='Mother statue';}
+  else if(nearby.type==='father'){tx=INTRO_LAYOUT.father.x;ty=INTRO_LAYOUT.father.y;label='Father statue';}
+  else if(nearby.type==='brother'){tx=nearby.target.x;ty=nearby.target.y;label='Brother statue';}
+  else if(nearby.type==='sister'){tx=nearby.target.x;ty=nearby.target.y;label='Sister statue';}
+  else if(nearby.type==='bonus'){const ids={quilt:'Maternal quilt',matrix:'Matrix painting',mammal:'Cow painting'};tx=INTRO_LAYOUT[nearby.target].x;ty=INTRO_LAYOUT[nearby.target].y;label=ids[nearby.target]||'Painting';}
+  else if(nearby.type==='exit'){tx=INTRO_LAYOUT.exit.x;ty=INTRO_LAYOUT.exit.y;label='Path outside';}
   else{tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
   const sx=tx*TILE_SIZE-camera.x+TILE_SIZE/2+cameraShake.x;
   const sy=ty*TILE_SIZE-camera.y-14+Math.sin(time*3)*2+cameraShake.y;
@@ -996,6 +1152,20 @@ function renderHUD() {
   const hg=ctx.createLinearGradient(0,0,0,32);
   hg.addColorStop(0,'rgba(0,0,0,0.6)');hg.addColorStop(1,'transparent');
   ctx.fillStyle=hg;ctx.fillRect(0,0,canvas.width,32);
+
+  if (introActive) {
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `600 12px ${FONT_FALLBACK}`;
+    let hint = 'Approach the Mother statue · Press E';
+    if (intro.motherDone && !intro.brotherDone) hint = 'Push Brother & Sister statues · Press E';
+    else if (intro.brotherDone && intro.sisterDone && !intro.fatherDone) hint = 'Speak with the Father statue · Press E';
+    else if (intro.exitOpen) hint = 'Walk north into the light';
+    ctx.fillText(hint, 12, 19);
+    ctx.fillStyle = '#888';
+    ctx.font = `11px ${FONT_FANTASY}`;
+    ctx.fillText('Examine quilts & paintings for bonus lore', 12, 34);
+    return;
+  }
 
   const loc=getLocationName(player.x,player.y);
   ctx.fillStyle='#ffd700';
@@ -1035,7 +1205,7 @@ function renderHUD() {
   bg.addColorStop(0,'transparent');bg.addColorStop(1,'rgba(0,0,0,0.5)');
   ctx.fillStyle=bg;ctx.fillRect(0,canvas.height-24,canvas.width,24);
   ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText('WASD: Move  ·  E: Interact  ·  I: Inventory  ·  L: Lexicon',12,canvas.height-7);
+  ctx.fillText('WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  L: Lexicon',12,canvas.height-7);
 
   // Quest panel
   if(flags.metGuru&&!flags.gameComplete) {
@@ -1069,6 +1239,11 @@ function renderHUD() {
 }
 
 function getLocationName(px,py) {
+  if (introActive) {
+    if (!intro.doorNorthOpen) return 'Family Shrine — Mother\'s Chamber';
+    if (!intro.exitOpen) return 'Family Shrine — Hall of Kin';
+    return 'Family Shrine — Threshold';
+  }
   if(px>30&&px<52&&py>24&&py<38) return 'Siṃhapura Village';
   if(px>4&&px<28&&py>22&&py<42) return "Vrīhi's Farm";
   if(px>30&&px<54&&py>4&&py<20) return 'Bodhi Monastery';
@@ -1080,7 +1255,7 @@ function getLocationName(px,py) {
 
 // ─── MINIMAP ───
 function renderMinimap() {
-  if(!minimap||!gameStarted) return;
+  if(!minimap||!gameStarted||introActive) return;
   const mw=100,mh=75,mx=canvas.width-mw-8,my=canvas.height-mh-28;
   // Bg
   ctx.fillStyle='rgba(0,0,0,0.5)';
@@ -1180,7 +1355,7 @@ function easeOutCubic(t){return 1-Math.pow(1-t,3);}
 const FONT_FANTASY = '"Optimus Princeps", "MedievalSharp", "Uncial Antiqua", "Cinzel", serif';
 const FONT_FANTASY_BOLD = '600'; // Semibold weight
 const FONT_FANTASY_ITALIC = 'italic';
-const FONT_FALLBACK = 'serif'; // For Sanskrit diacritics — plain serif to blend naturally
+const FONT_FALLBACK = '"Noto Sans Devanagari", serif'; // Sanskrit & IAST diacritics
 
 // ─── HELPER: Detect Sanskrit diacritics ───
 function hasSanskritChars(text) {
@@ -1368,5 +1543,550 @@ function renderLexiconPanel() {
   }
 }
 
+// ═══════════════════════════════════════
+//           FAMILY SHRINE INTRO
+// ═══════════════════════════════════════
+function showIntroMessage(text, seconds) {
+  introMsg = { text, timer: seconds || 5 };
+}
+
+function openIntroQuiz(key, onCorrect) {
+  const q = INTRO_QUIZ[key];
+  quizState = {
+    key,
+    q: q.q,
+    opts: [...q.opts],
+    ok: q.ok,
+    wrong: false,
+    wrongIdx: -1,
+    hovered: -1,
+    onCorrect,
+    _bounds: [],
+  };
+}
+
+function introDist(tx, ty, w, h) {
+  const cx = player.x + 0.5;
+  const cy = player.y + 0.5;
+  const ox = tx + (w || 1) / 2;
+  const oy = ty + (h || 1) / 2;
+  return Math.hypot(cx - ox, cy - oy);
+}
+
+function introStatueBlocks(tx, ty) {
+  const m = INTRO_LAYOUT.mother;
+  if (!intro.motherDone && tx === m.x && ty === m.y) return true;
+  if (!intro.doorNorthOpen) return false;
+  for (const which of ['brother', 'sister']) {
+    const s = intro[which];
+    const ix = Math.floor(s.x);
+    const iy = Math.floor(s.y);
+    if (tx === ix && ty === iy) return true;
+  }
+  if (intro.fatherVisible) {
+    const f = INTRO_LAYOUT.father;
+    if (tx === f.x && ty === f.y) return true;
+  }
+  return false;
+}
+
+function getIntroNearby() {
+  let best = null;
+  let bestD = 2.2;
+  const tryPick = (type, target, tx, ty, dist) => {
+    const d = introDist(tx, ty, 1, 1);
+    if (d < dist && d < bestD) { bestD = d; best = { type, target }; }
+  };
+
+  if (!intro.motherDone) {
+    tryPick('mother', null, INTRO_LAYOUT.mother.x, INTRO_LAYOUT.mother.y, 2);
+  }
+  if (intro.doorNorthOpen) {
+    if (!intro.brotherDone && !intro.brother.sliding) {
+      tryPick('brother', intro.brother, intro.brother.x, intro.brother.y, 1.8);
+    }
+    if (!intro.sisterDone && !intro.sister.sliding) {
+      tryPick('sister', intro.sister, intro.sister.x, intro.sister.y, 1.8);
+    }
+    if (intro.fatherVisible && !intro.fatherDone) {
+      tryPick('father', null, INTRO_LAYOUT.father.x, INTRO_LAYOUT.father.y, 2);
+    }
+  }
+  if (!intro.bonuses.quilt) tryPick('bonus', 'quilt', INTRO_LAYOUT.quilt.x, INTRO_LAYOUT.quilt.y, 1.6);
+  if (!intro.bonuses.matrix) tryPick('bonus', 'matrix', INTRO_LAYOUT.matrix.x, INTRO_LAYOUT.matrix.y, 1.6);
+  if (!intro.bonuses.mammal) tryPick('bonus', 'mammal', INTRO_LAYOUT.mammal.x, INTRO_LAYOUT.mammal.y, 1.6);
+  if (intro.exitOpen) tryPick('exit', null, INTRO_LAYOUT.exit.x, INTRO_LAYOUT.exit.y, 1.8);
+
+  return best;
+}
+
+function tryIntroInteract() {
+  const near = getIntroNearby();
+  if (!near) return;
+
+  if (near.type === 'mother') {
+    openIntroQuiz('mother', () => {
+      intro.motherDone = true;
+      discoverWord('matri');
+      showIntroMessage(INTRO_QUIZ.mother.etym, 5);
+      applyIntroDoorNorth(map, true);
+      intro.doorNorthOpen = true;
+      screenFlash = { alpha: 0.35, color: '#ffd700' };
+      for (let i = 0; i < 12; i++) {
+        spawnParticle(INTRO_LAYOUT.mother.x * TILE_SIZE + 16, INTRO_LAYOUT.mother.y * TILE_SIZE + 16, 'sparkle');
+      }
+    });
+    return;
+  }
+
+  if (near.type === 'bonus') {
+    const id = near.target;
+    if (!intro.bonuses[id]) {
+      intro.bonuses[id] = true;
+      showIntroMessage(INTRO_BONUS_TEXT[id], 6);
+      screenFlash = { alpha: 0.2, color: '#ffd700' };
+    }
+    return;
+  }
+
+  if (near.type === 'brother' && !intro.brotherDone) {
+    slideIntroStatue('brother');
+    return;
+  }
+  if (near.type === 'sister' && !intro.sisterDone) {
+    slideIntroStatue('sister');
+    return;
+  }
+
+  if (near.type === 'father' && intro.fatherVisible && !intro.fatherDone) {
+    openIntroQuiz('father', () => {
+      intro.fatherDone = true;
+      discoverWord('pitri');
+      showIntroMessage(INTRO_QUIZ.father.etym, 5);
+      applyIntroExit(map, true);
+      intro.exitOpen = true;
+      screenFlash = { alpha: 0.4, color: '#ffd700' };
+      cameraShake.intensity = 6;
+    });
+    return;
+  }
+
+  if (near.type === 'exit' && intro.exitOpen) {
+    completeIntro();
+  }
+}
+
+function slideIntroStatue(which) {
+  const s = intro[which];
+  const L = INTRO_LAYOUT[which];
+  if (s.sliding) return;
+  if (which === 'brother' && intro.brotherDone) return;
+  if (which === 'sister' && intro.sisterDone) return;
+  s.sliding = true;
+  s.t = 0;
+  s.fromX = s.x;
+  s.fromY = s.y;
+  s.toX = L.targetX;
+  s.toY = L.targetY;
+}
+
+function updateIntroStatues(dt) {
+  ['brother', 'sister'].forEach(which => {
+    const s = intro[which];
+    if (!s.sliding) return;
+    s.t += dt * 1.4;
+    const t = Math.min(1, s.t);
+    const ease = 1 - Math.pow(1 - t, 3);
+    s.x = s.fromX + (s.toX - s.fromX) * ease;
+    s.y = s.fromY + (s.toY - s.fromY) * ease;
+    if (t >= 1) {
+      s.sliding = false;
+      s.x = s.toX;
+      s.y = s.toY;
+      if (which === 'brother' && !intro.brotherDone) {
+        intro.brotherDone = true;
+        discoverWord('bhrata');
+        showIntroMessage(INTRO_ETYM.brother, 5);
+      }
+      if (which === 'sister' && !intro.sisterDone) {
+        intro.sisterDone = true;
+        discoverWord('svasar');
+        showIntroMessage(INTRO_ETYM.sister, 5);
+      }
+      if (intro.brotherDone && intro.sisterDone && !intro.fatherVisible) {
+        intro.fatherVisible = true;
+        showIntroMessage('A third figure emerges from the stone…', 3);
+        screenFlash = { alpha: 0.25, color: '#ffd700' };
+      }
+    }
+  });
+}
+
+function updateIntro(dt) {
+  updateIntroStatues(dt);
+
+  applyTouchMovement();
+  let dx = 0, dy = 0;
+  if (touch.active && (touch.dx || touch.dy)) {
+    dx = touch.dx;
+    dy = touch.dy;
+  } else {
+    if (isDown('KeyW') || isDown('ArrowUp')) dy = -1;
+    if (isDown('KeyS') || isDown('ArrowDown')) dy = 1;
+    if (isDown('KeyA') || isDown('ArrowLeft')) dx = -1;
+    if (isDown('KeyD') || isDown('ArrowRight')) dx = 1;
+  }
+  if (dx !== 0 || dy !== 0) {
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    dx /= len;
+    dy /= len;
+    const spd = player.speed * dt;
+    const nx = player.x + dx * spd;
+    const ny = player.y + dy * spd;
+    if (canMoveTo(nx, player.y)) player.x = nx;
+    if (canMoveTo(player.x, ny)) player.y = ny;
+    player.dir = Math.atan2(dy, dx);
+    player.moving = true;
+    player.bobPhase += dt * 10;
+  } else {
+    player.moving = false;
+    player.bobPhase += dt * 2;
+  }
+
+  if (justPressed('KeyE')) tryIntroInteract();
+
+  if (intro.exitOpen && player.y < 2.2 && Math.abs(player.x - INTRO_LAYOUT.exit.x) < 1.2) {
+    completeIntro();
+  }
+
+  const tx = player.x * TILE_SIZE - canvas.width / 2;
+  const ty = player.y * TILE_SIZE - canvas.height / 2;
+  camera.x += (tx - camera.x) * 0.12;
+  camera.y += (ty - camera.y) * 0.12;
+  camera.x = Math.max(0, Math.min(mapW * TILE_SIZE - canvas.width, camera.x));
+  camera.y = Math.max(0, Math.min(mapH * TILE_SIZE - canvas.height, camera.y));
+}
+
+function completeIntro() {
+  if (!introActive) return;
+  introActive = false;
+  introMsg = null;
+  quizState = null;
+  flags.introComplete = true;
+  map = mainMap;
+  mapW = MAP_W;
+  mapH = MAP_H;
+  player.x = INTRO_WORLD_EXIT.x;
+  player.y = INTRO_WORLD_EXIT.y;
+  player.dir = Math.PI / 2;
+  buildMinimap();
+  startDialogue({
+    lines: [
+      'The stone door grinds open. {w}Sunlight{/} — real sunlight — spills across the threshold.',
+      'You step into {g}Siṃhapura{/}. The village hums with voices, spice, and memory.',
+      '{d}The words of kin still echo in the chamber behind you.\nNow the wider world awaits.{/}',
+      'Find {g}Guru Vidya{/} in the village square. The journey to restore the {w}Tri-Ratna{/} begins here.',
+    ],
+    words: [],
+    give: [],
+    take: [],
+    setFlags: ['metIntro'],
+  });
+}
+
+function renderIntroScene() {
+  renderIntroProps();
+  renderIntroStatues();
+}
+
+function renderIntroProps() {
+  const drawProp = (tx, ty, drawFn) => {
+    const sx = tx * TILE_SIZE - camera.x;
+    const sy = ty * TILE_SIZE - camera.y;
+    if (sx < -64 || sx > canvas.width + 64 || sy < -64 || sy > canvas.height + 64) return;
+    drawFn(sx, sy);
+  };
+
+  if (!intro.bonuses.quilt) {
+    drawProp(INTRO_LAYOUT.quilt.x, INTRO_LAYOUT.quilt.y, (x, y) => {
+      ctx.fillStyle = '#8b4040';
+      ctx.fillRect(x + 4, y + 12, 24, 14);
+      ctx.fillStyle = '#a05050';
+      ctx.fillRect(x + 6, y + 8, 20, 8);
+      ctx.strokeStyle = '#ffd966';
+      ctx.strokeRect(x + 4, y + 8, 24, 18);
+    });
+  }
+  if (!intro.bonuses.matrix) {
+    drawProp(INTRO_LAYOUT.matrix.x, INTRO_LAYOUT.matrix.y, (x, y) => {
+      ctx.fillStyle = '#4a3828';
+      ctx.fillRect(x + 2, y + 4, 28, 22);
+      ctx.fillStyle = '#1a2840';
+      ctx.fillRect(x + 6, y + 8, 20, 14);
+      ctx.fillStyle = '#00ffaa';
+      ctx.font = '10px monospace';
+      ctx.fillText('MATRIX', x + 8, y + 18);
+    });
+  }
+  if (!intro.bonuses.mammal) {
+    drawProp(INTRO_LAYOUT.mammal.x, INTRO_LAYOUT.mammal.y, (x, y) => {
+      ctx.fillStyle = '#5a4028';
+      ctx.fillRect(x + 2, y + 6, 26, 20);
+      ctx.fillStyle = '#deb887';
+      ctx.beginPath();
+      ctx.ellipse(x + 16, y + 18, 10, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(x + 20, y + 10, 4, 6);
+    });
+  }
+}
+
+function drawFamilyStatue(kind, tx, ty, lit) {
+  const x = tx * TILE_SIZE - camera.x;
+  const y = ty * TILE_SIZE - camera.y;
+  const stone = lit ? '#b0b0b0' : '#6a6a6a';
+  const gold = lit ? '#D4AF37' : '#6a5a30';
+  const alpha = lit ? 1 : 0.65;
+
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = stone;
+
+  if (kind === 'mother') {
+    ctx.fillRect(x + 4, y + 28, 40, 12);
+    ctx.fillStyle = lit ? '#c8c8c8' : '#7a7a7a';
+    ctx.beginPath();
+    ctx.arc(x + 24, y + 14, 12, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = stone;
+    ctx.beginPath();
+    ctx.arc(x + 24, y + 20, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x + 14, y + 26, 20, 12);
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else if (kind === 'father') {
+    ctx.fillRect(x + 4, y + 32, 40, 8);
+    ctx.beginPath();
+    ctx.arc(x + 24, y + 14, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x + 16, y + 22, 16, 14);
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 34, y + 26);
+    ctx.lineTo(x + 34, y + 4);
+    ctx.stroke();
+    ctx.fillStyle = gold;
+    ctx.beginPath();
+    ctx.arc(x + 34, y + 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === 'brother') {
+    ctx.fillRect(x + 4, y + 32, 40, 8);
+    ctx.fillRect(x + 10, y + 14, 28, 22);
+    ctx.beginPath();
+    ctx.arc(x + 24, y + 10, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#888';
+    ctx.beginPath();
+    ctx.moveTo(x + 36, y + 18);
+    ctx.lineTo(x + 46, y + 6);
+    ctx.lineTo(x + 38, y + 14);
+    ctx.fill();
+    ctx.strokeStyle = gold;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  } else if (kind === 'sister') {
+    ctx.fillRect(x + 8, y + 30, 32, 8);
+    ctx.beginPath();
+    ctx.arc(x + 24, y + 14, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(x + 14, y + 22, 20, 12);
+    if (lit) {
+      ctx.fillStyle = gold;
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur = lit ? 10 : 0;
+      ctx.beginPath();
+      ctx.arc(x + 24, y + 28, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  ctx.fillStyle = lit ? '#fff' : '#aaa';
+  ctx.font = `20px ${FONT_FALLBACK}`;
+  ctx.textAlign = 'center';
+  const labels = { mother: 'मातृ', father: 'पितृ', brother: 'भ्रातृ', sister: 'स्वसृ' };
+  ctx.fillText(labels[kind], x + 24, y + 46);
+  ctx.textAlign = 'left';
+  ctx.globalAlpha = 1;
+}
+
+function renderIntroStatues() {
+  drawFamilyStatue('mother', INTRO_LAYOUT.mother.x, INTRO_LAYOUT.mother.y, intro.motherDone);
+  if (intro.doorNorthOpen) {
+    drawFamilyStatue('brother', intro.brother.x, intro.brother.y, intro.brotherDone);
+    drawFamilyStatue('sister', intro.sister.x, intro.sister.y, intro.sisterDone);
+    if (intro.fatherVisible) {
+      drawFamilyStatue('father', INTRO_LAYOUT.father.x, INTRO_LAYOUT.father.y, intro.fatherDone);
+    }
+  }
+  if (intro.exitOpen) {
+    const ex = INTRO_LAYOUT.exit.x * TILE_SIZE - camera.x;
+    const ey = INTRO_LAYOUT.exit.y * TILE_SIZE - camera.y;
+    const pulse = 0.35 + 0.2 * Math.sin(time * 3);
+    ctx.fillStyle = `rgba(100, 220, 120, ${pulse})`;
+    ctx.fillRect(ex - 4, ey - 8, TILE_SIZE + 8, TILE_SIZE + 16);
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `12px ${FONT_FANTASY}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('To Siṃhapura', ex + TILE_SIZE / 2, ey - 12);
+    ctx.textAlign = 'left';
+  }
+}
+
+function renderIntroMessage() {
+  if (!introMsg) return;
+  const pw = 520, ph = 100;
+  const px = (canvas.width - pw) / 2;
+  const py = canvas.height * 0.22;
+  const fade = Math.min(1, introMsg.timer);
+  ctx.globalAlpha = Math.min(1, fade) * Math.min(1, introMsg.timer / 0.5);
+  ctx.fillStyle = 'rgba(0,0,0,0.82)';
+  roundRect(ctx, px, py, pw, ph, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 2;
+  roundRect(ctx, px, py, pw, ph, 8);
+  ctx.stroke();
+  ctx.fillStyle = '#f5e6c8';
+  ctx.font = `15px ${FONT_FALLBACK}`;
+  wrapTextCanvas(introMsg.text, px + 18, py + 28, pw - 36, 22);
+  ctx.globalAlpha = 1;
+}
+
+function wrapTextCanvas(text, x, y, maxW, lh) {
+  const words = text.split(' ');
+  let line = '', ly = y;
+  for (const w of words) {
+    const test = line + w + ' ';
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line.trim(), x, ly);
+      line = w + ' ';
+      ly += lh;
+    } else line = test;
+  }
+  ctx.fillText(line.trim(), x, ly);
+}
+
+function renderQuizOverlay() {
+  if (!quizState) return;
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const pw = 460, ph = 40 + quizState.opts.length * 44;
+  const px = (canvas.width - pw) / 2;
+  const py = (canvas.height - ph) / 2;
+
+  ctx.fillStyle = 'rgba(18,14,32,0.97)';
+  roundRect(ctx, px, py, pw, ph, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 2;
+  roundRect(ctx, px, py, pw, ph, 8);
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffd700';
+  ctx.font = `600 14px ${FONT_FALLBACK}`;
+  wrapTextCanvas(quizState.q, px + 16, py + 26, pw - 32, 20);
+
+  let oy = py + 52;
+  quizState.opts.forEach((opt, i) => {
+    const hover = quizState.hovered === i;
+    const wrong = quizState.wrongIdx === i;
+    ctx.fillStyle = wrong ? 'rgba(160,48,48,0.5)' : hover ? 'rgba(255,215,0,0.15)' : 'rgba(255,255,255,0.06)';
+    roundRect(ctx, px + 14, oy, pw - 28, 36, 5);
+    ctx.fill();
+    ctx.strokeStyle = wrong ? '#c04040' : '#8b7355';
+    ctx.lineWidth = 1;
+    roundRect(ctx, px + 14, oy, pw - 28, 36, 5);
+    ctx.stroke();
+    ctx.fillStyle = '#f5e6c8';
+    ctx.font = `15px ${FONT_FALLBACK}`;
+    ctx.fillText(opt, px + 26, oy + 24);
+    quizState._bounds = quizState._bounds || [];
+    quizState._bounds[i] = { x: px + 14, y: oy, w: pw - 28, h: 36 };
+    oy += 44;
+  });
+
+  if (quizState.wrong) {
+    ctx.fillStyle = '#e08080';
+    ctx.font = `12px ${FONT_FANTASY}`;
+    ctx.fillText('Try again…', px + 16, oy + 8);
+  }
+}
+
+function setupQuizInput() {
+  canvas.addEventListener('click', e => {
+    if (!quizState) return;
+    e.stopPropagation();
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const cb = quizState.onCorrect;
+    quizState._bounds?.forEach((b, i) => {
+      if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+        const opt = quizState.opts[i];
+        if (quizState.ok.includes(opt)) {
+          quizState = null;
+          cb();
+        } else {
+          quizState.wrong = true;
+          quizState.wrongIdx = i;
+          setTimeout(() => {
+            if (quizState) { quizState.wrong = false; quizState.wrongIdx = -1; }
+          }, 700);
+        }
+      }
+    });
+  });
+  canvas.addEventListener('mousemove', e => {
+    if (!quizState) return;
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    quizState.hovered = -1;
+    quizState._bounds?.forEach((b, i) => {
+      if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) quizState.hovered = i;
+    });
+  });
+}
+
+// Keyboard quiz: 1/2/3 keys when quiz open
+function updateQuizKeys() {
+  if (!quizState) return;
+  const keysNum = ['Digit1', 'Digit2', 'Digit3'];
+  keysNum.forEach((code, i) => {
+    if (justPressed(code) && quizState.opts[i]) {
+      const opt = quizState.opts[i];
+      const cb = quizState.onCorrect;
+      if (quizState.ok.includes(opt)) {
+        quizState = null;
+        cb();
+      } else {
+        quizState.wrong = true;
+        quizState.wrongIdx = i;
+        setTimeout(() => {
+          if (quizState) { quizState.wrong = false; quizState.wrongIdx = -1; }
+        }, 700);
+      }
+    }
+  });
+}
+
 // ─── START ───
-window.addEventListener('load',init);
+window.addEventListener('load', () => {
+  init();
+  setupQuizInput();
+});

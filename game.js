@@ -5,7 +5,7 @@
 // ─── STATE ───
 let canvas, ctx;
 let map = [];
-let player = { x:40.5, y:32.5, dir:0, speed:4.5, moving:false, stepTimer:0, bobPhase:0 };
+let player = { x: SPAWN_ROOM.player.x, y: SPAWN_ROOM.player.y, dir:0, speed:4.5, moving:false, stepTimer:0, bobPhase:0 };
 let camera = { x:0, y:0 };
 let keys = {}, prevKeys = {};
 let inventory = [];
@@ -17,6 +17,9 @@ let wordPopup = null;
 let wordPopupQueue = [];
 let showInventory = false;
 let showLexicon = false;
+let showEtymologyBook = false;
+let etymologyBookScroll = 0;
+let discoveredEtymology = new Set();
 let time = 0;
 let gameStarted = false;
 let titleFade = 0;        // 0→1 fade from title to game
@@ -35,6 +38,9 @@ let introActive = false;
 let quizState = null;
 let introMsg = null;
 
+const SPAWN_ZOOM = 3.4;
+let renderInWorldSpace = false;
+
 const intro = {
   motherDone: false,
   doorNorthOpen: false,
@@ -50,16 +56,16 @@ const intro = {
 
 const INTRO_QUIZ = {
   mother: {
-    q: "What is the Sanskrit root for the English word 'mother'?",
+    q: "Which Sanskrit word means 'mother'?",
     opts: ['mātṛ-', 'pitṛ-', 'bhrātar-'],
     ok: ['mātṛ-'],
     etym: "English 'mother' and Sanskrit 'mātṛ' share the exact same 5,000-year-old root.",
     word: 'matri',
   },
   father: {
-    q: "Sanskrit 'pitṛ' is cognate with which English word?",
-    opts: ['Father', 'Mother', 'Brother'],
-    ok: ['Father'],
+    q: "Which Sanskrit word means 'father'?",
+    opts: ['pitṛ-', 'mātṛ-', 'bhrātar-'],
+    ok: ['pitṛ-'],
     etym: "This word is nearly identical across every Indo-European language from Iceland to India.",
     word: 'pitri',
   },
@@ -71,6 +77,60 @@ const INTRO_ETYM = {
 };
 
 const INTRO_SAVE_KEY = 'mantra_intro_complete';
+const SPAWN_SAVE_KEY = 'mantra_spawn_mother_done';
+
+const MOTHER_QUIZ = {
+  q: "Which Sanskrit word means 'mother'?",
+  opts: ['mātṛ-', 'pitṛ-', 'bhrātar-'],
+  ok: ['mātṛ-'],
+  etym: "English 'mother' and Sanskrit 'mātṛ' share the exact same 5,000-year-old root.",
+  wrongHint: "Listen to how the word sounds… does it echo something you already know?",
+  word: 'matri',
+};
+
+const SPAWN_TUTORIAL = {
+  welcome:
+    "You wake in cold stone.\n\n" +
+    "Hong Kong, 2225 — two centuries after the last teacher left the Sanskrit school beneath Siṃhapura. " +
+    "A program called MANTRA slept in the ruins… until something woke it. And you.\n\n" +
+    "The world outside is vast. But first — this chamber.",
+  controls:
+    "You remember how to move.\n\n" +
+    "WASD or touch — walk the room.\n" +
+    "E or tap — speak, examine, or act on any statue or inscription.\n\n" +
+    "When you're ready, find the sealed door to the south.",
+  doorFail:
+    "The stone door will not budge. Runes older than the city trace its frame.\n\n" +
+    "In the corner, a Mother of stone watches in silence. She has heard every word spoken here for five thousand years. Press E at the statue — she may know the password.",
+  hallGuide1: 'Press E at any statue to speak, examine, or push it back.',
+  hallGuide2: 'The Brother and Sister stand off the grooves in the floor. Push them along the tracks to the niches on the left wall.',
+  hallGuide3: 'When the whole family stands together again, the Father will emerge from the stone.',
+  hallGuide4: 'Paintings hang on the hall walls — press E to read their mātṛ- root stories. Press B for your Etymology Book.',
+  motherEarly:
+    "The statue waits, patient as stone. Try the sealed door first — you'll understand why you're still here.",
+};
+
+let spawnTutorial = { step: 'done', doorTried: false };
+
+let spawnFamily = {
+  brotherDone: false,
+  sisterDone: false,
+  fatherVisible: false,
+  fatherDone: false,
+  brother: { x: 0, y: 0, sliding: false, pathIdx: 0, segT: 0, path: null },
+  sister: { x: 0, y: 0, sliding: false, pathIdx: 0, segT: 0, path: null },
+};
+
+let spawnCamera = { mode: 'player' };
+const STATUE_TRACK_SPEED = 1.15;
+
+const FATHER_QUIZ = {
+  q: INTRO_QUIZ.father.q,
+  opts: INTRO_QUIZ.father.opts,
+  ok: INTRO_QUIZ.father.ok,
+  etym: INTRO_QUIZ.father.etym,
+  word: INTRO_QUIZ.father.word,
+};
 
 function loadIntroComplete() {
   try { return localStorage.getItem(INTRO_SAVE_KEY) === '1'; } catch { return false; }
@@ -78,6 +138,61 @@ function loadIntroComplete() {
 
 function saveIntroComplete() {
   try { localStorage.setItem(INTRO_SAVE_KEY, '1'); } catch { /* file:// or private mode */ }
+}
+
+function loadSpawnComplete() {
+  try { return localStorage.getItem(SPAWN_SAVE_KEY) === '1'; } catch { return false; }
+}
+
+function saveSpawnComplete() {
+  try { localStorage.setItem(SPAWN_SAVE_KEY, '1'); } catch { /* file:// or private mode */ }
+}
+
+function spawnRoomInteriorBounds() {
+  const R = SPAWN_ROOM;
+  return { x: R.x + 1, y: R.y + 1, w: R.iw, h: R.ih };
+}
+
+const PLAYER_HW = 0.3;
+const PLAYER_HH = 0.35;
+
+function playerInSpawnRoom() {
+  const b = spawnRoomInteriorBounds();
+  return player.x - PLAYER_HW >= b.x && player.x + PLAYER_HW < b.x + b.w &&
+         player.y - PLAYER_HH >= b.y && player.y + PLAYER_HH < b.y + b.h;
+}
+
+function playerInFamilyHall() {
+  const b = familyHallInteriorBounds();
+  return player.x - PLAYER_HW >= b.x && player.x + PLAYER_HW < b.x + b.w &&
+         player.y - PLAYER_HH >= b.y && player.y + PLAYER_HH < b.y + b.h;
+}
+
+function playerInSpawnTutorial() {
+  return playerInSpawnRoom() || playerInFamilyHall();
+}
+
+function isSpawnChamberZoom() {
+  return !introActive && !flags.spawnTutorialDone;
+}
+
+function isInSpawnTutorial() {
+  return !introActive && !flags.spawnTutorialDone;
+}
+
+function getWorldZoom() {
+  return isSpawnChamberZoom() ? SPAWN_ZOOM : 1;
+}
+
+function snapCameraToTarget() {
+  if (!canvas) return;
+  const z = getWorldZoom();
+  const vw = canvas.width / z, vh = canvas.height / z;
+  const focus = getSpawnCameraTile();
+  const px = focus.x * TILE_SIZE;
+  const py = focus.y * TILE_SIZE;
+  camera.x = Math.max(0, Math.min(mapW * TILE_SIZE - vw, px - vw / 2));
+  camera.y = Math.max(0, Math.min(mapH * TILE_SIZE - vh, py - vh / 2));
 }
 
 function shouldPlayIntro(urlParams) {
@@ -102,7 +217,133 @@ function beginMainWorld() {
   introActive = false;
   mapW = MAP_W;
   mapH = MAP_H;
+  applySpawnChambers(map, {
+    motherDoorOpen: !!flags.spawnMotherDone,
+    hallDoorOpen: !!flags.spawnTutorialDone,
+  });
+  player.x = SPAWN_ROOM.player.x;
+  player.y = SPAWN_ROOM.player.y;
+  player.dir = Math.PI / 2;
+  initSpawnFamilyState();
+  clampPlayerToSpawnRoom();
+  snapCameraToTarget();
   buildMinimap();
+  if (!flags.spawnTutorialDone) resetSpawnTutorial();
+  else spawnTutorial = { step: 'done', doorTried: true };
+}
+
+function initSpawnFamilyState() {
+  const B = FAMILY_HALL.brother, S = FAMILY_HALL.sister;
+  if (flags.spawnTutorialDone) {
+    spawnFamily.brotherDone = true;
+    spawnFamily.sisterDone = true;
+    spawnFamily.fatherVisible = true;
+    spawnFamily.fatherDone = true;
+    spawnFamily.brother = { x: B.targetX, y: B.targetY, sliding: false, pathIdx: 0, segT: 0, path: null };
+    spawnFamily.sister = { x: S.targetX, y: S.targetY, sliding: false, pathIdx: 0, segT: 0, path: null };
+  } else {
+    spawnFamily.brotherDone = false;
+    spawnFamily.sisterDone = false;
+    spawnFamily.fatherVisible = false;
+    spawnFamily.fatherDone = false;
+    spawnFamily.brother = { x: B.homeX, y: B.homeY, sliding: false, pathIdx: 0, segT: 0, path: null };
+    spawnFamily.sister = { x: S.homeX, y: S.homeY, sliding: false, pathIdx: 0, segT: 0, path: null };
+  }
+  spawnCamera = { mode: 'player' };
+}
+
+function isStatueSliding() {
+  return spawnFamily.brother.sliding || spawnFamily.sister.sliding;
+}
+
+function getSpawnCameraTile() {
+  if (spawnCamera.mode === 'statue') return { x: spawnCamera.x, y: spawnCamera.y };
+  return { x: player.x, y: player.y };
+}
+
+function updateGameCamera(dt) {
+  const z = getWorldZoom();
+  const vw = canvas.width / z, vh = canvas.height / z;
+  const focus = getSpawnCameraTile();
+  const px = focus.x * TILE_SIZE;
+  const py = focus.y * TILE_SIZE;
+  const tx = px - vw / 2;
+  const ty = py - vh / 2;
+  const lerp = isSpawnChamberZoom() ? (spawnCamera.mode === 'statue' ? 0.18 : 0.14) : 0.1;
+  camera.x += (tx - camera.x) * lerp;
+  camera.y += (ty - camera.y) * lerp;
+  camera.x = Math.max(0, Math.min(mapW * TILE_SIZE - vw, camera.x));
+  camera.y = Math.max(0, Math.min(mapH * TILE_SIZE - vh, camera.y));
+}
+
+function resetSpawnTutorial() {
+  spawnTutorial = { step: 'pending', doorTried: false };
+}
+
+function startSpawnTutorial() {
+  if (flags.spawnTutorialDone || spawnTutorial.step !== 'pending') return;
+  spawnTutorial.step = 'welcome';
+  showIntroMessage(SPAWN_TUTORIAL.welcome, () => {
+    showIntroMessage(SPAWN_TUTORIAL.controls, () => { spawnTutorial.step = 'door'; });
+  });
+}
+
+function getSpawnTutorialHint() {
+  if (flags.spawnTutorialDone || spawnTutorial.step === 'done') return null;
+  switch (spawnTutorial.step) {
+    case 'welcome':
+    case 'controls':
+      return 'Read the inscription · Press E to continue';
+    case 'door':
+      return 'Sealed door to the south · walk close and press E';
+    case 'mother':
+      return 'Mother statue · press E to speak';
+    case 'hall':
+      if (!spawnFamily.brotherDone || !spawnFamily.sisterDone) {
+        return 'Push statues along the floor grooves · press E';
+      }
+      if (!spawnFamily.fatherDone) return 'Father statue · press E to speak';
+      return 'Paintings on the walls · press B for Etymology Book';
+    case 'guru':
+      return 'Find Guru Vidya at the village crossroads · press E to speak';
+    default:
+      return 'Tutorial Chamber';
+  }
+}
+
+function dismissIntroMessage() {
+  if (!introMsg) return;
+  if (introMsg.charIndex < introMsg.visLen) {
+    introMsg.charIndex = introMsg.visLen;
+    return;
+  }
+  const fn = introMsg.onDismiss;
+  introMsg = null;
+  if (spawnCamera.mode === 'statue') {
+    spawnCamera = { mode: 'player' };
+    snapCameraToTarget();
+  }
+  if (fn) fn();
+}
+
+function updateIntroMessage(dt) {
+  if (!introMsg || introMsg.charIndex >= introMsg.visLen) return;
+  const stripped = introMsg.text;
+  const ci = Math.max(0, Math.floor(introMsg.charIndex) - 1);
+  const ch = stripped[ci] || '';
+  let spd = 0.42;
+  if ('.!?'.includes(ch)) spd = 0.21;
+  else if (',;:—–…'.includes(ch)) spd = 0.294;
+  else if (ch === '\n') spd = 0.252;
+  else if (ch === ' ') spd = 0.504;
+  introMsg.charIndex += spd;
+}
+
+function clampPlayerToSpawnRoom() {
+  if (flags.spawnTutorialDone || introActive) return;
+  const b = flags.spawnMotherDone ? spawnTutorialBounds() : spawnRoomInteriorBounds();
+  player.x = Math.max(b.x + PLAYER_HW, Math.min(b.x + b.w - PLAYER_HW, player.x));
+  player.y = Math.max(b.y + PLAYER_HH, Math.min(b.y + b.h - PLAYER_HH, player.y));
 }
 
 // ─── INIT ───
@@ -122,6 +363,10 @@ function init() {
   mainMap = generateMap();
   groundItemState = GROUND_ITEMS.map(()=>false);
   flags.introComplete = !shouldPlayIntro(urlParams);
+  // Always play spawn tutorial on load unless ?skipSpawn
+  flags.spawnMotherDone = false;
+  flags.spawnTutorialDone = urlParams.has('skipSpawn');
+  if (flags.spawnTutorialDone) flags.spawnMotherDone = true;
   if (flags.introComplete) beginMainWorld();
   else beginIntroMap();
   // Seed title particles
@@ -130,6 +375,7 @@ function init() {
     gameStarted = true;
     titleFade = 1;
     particles = [];
+    snapCameraToTarget();
   }
   gameLoop(performance.now());
 }
@@ -166,8 +412,9 @@ function setupTouchControls() {
     const t = e.changedTouches[0];
     const moved = Math.hypot(t.clientX - touch.tapX, t.clientY - touch.tapY);
     touch.active = false;
-    if (moved < 18 && gameStarted && !dialogueState && !showInventory && !showLexicon && !quizState && !introMsg) {
-      tryInteract();
+    if (moved < 18 && gameStarted && !dialogueState && !showInventory && !showLexicon && !showEtymologyBook && !quizState) {
+      if (introMsg) dismissIntroMessage();
+      else tryInteract();
     }
   }, { passive: false });
 }
@@ -175,7 +422,7 @@ function setupTouchControls() {
 function applyTouchMovement() {
   touch.dx = 0;
   touch.dy = 0;
-  if (!touch.active || !gameStarted || dialogueState || showInventory || showLexicon || quizState || introMsg) return;
+  if (!touch.active || !gameStarted || dialogueState || showInventory || showLexicon || showEtymologyBook || quizState || introMsg) return;
   const px = player.x * TILE_SIZE + TILE_SIZE / 2;
   const py = player.y * TILE_SIZE + TILE_SIZE / 2;
   const dx = touch.worldX - px;
@@ -219,13 +466,17 @@ function update(dt) {
       gameStarted = true;
       titleFade = 0;
       particles = [];
+      snapCameraToTarget();
     }
     if (justPressed('Escape') && introActive) skipIntroToWorld();
     return;
   }
 
-  // Fade in from title
+  // Title fade + spawn tutorial kickoff
   if(titleFade < 1) titleFade = Math.min(1, titleFade + dt * 1.5);
+  if (gameStarted && titleFade >= 1 && spawnTutorial.step === 'pending' && !introMsg && !quizState) {
+    startSpawnTutorial();
+  }
 
   // Screen flash decay
   if(screenFlash.alpha > 0) screenFlash.alpha = Math.max(0, screenFlash.alpha - dt * 2);
@@ -267,11 +518,11 @@ function update(dt) {
   if(dialogueState) { updateDialogue(); updateParticles(dt); return; }
 
   if (quizState || introMsg) {
+    updateGameCamera(dt);
+    if (!flags.spawnTutorialDone) updateSpawnFamilyStatues(dt);
     if (quizState) updateQuizKeys();
-    if (introMsg) {
-      introMsg.timer -= dt;
-      if (introMsg.timer <= 0) introMsg = null;
-    }
+    if (introMsg) updateIntroMessage(dt);
+    if (introMsg && (justPressed('KeyE') || justPressed('Enter') || justPressed('Space'))) dismissIntroMessage();
     updateParticles(dt);
     return;
   }
@@ -284,9 +535,18 @@ function update(dt) {
   }
 
   // Panels
-  if(justPressed('KeyI')||justPressed('Tab')) { showInventory=!showInventory; showLexicon=false; }
-  if(justPressed('KeyL')) { showLexicon=!showLexicon; showInventory=false; }
-  if(showInventory||showLexicon) { if(justPressed('Escape')) { showInventory=false; showLexicon=false; } updateParticles(dt); return; }
+  if(justPressed('KeyI')||justPressed('Tab')) { showInventory=!showInventory; showLexicon=false; showEtymologyBook=false; }
+  if(justPressed('KeyL')) { showLexicon=!showLexicon; showInventory=false; showEtymologyBook=false; }
+  if(justPressed('KeyB')) { showEtymologyBook=!showEtymologyBook; showInventory=false; showLexicon=false; etymologyBookScroll=0; }
+  if(showInventory||showLexicon||showEtymologyBook) {
+    if(justPressed('Escape')) { showInventory=false; showLexicon=false; showEtymologyBook=false; }
+    if(showEtymologyBook && discoveredEtymology.size > 0) {
+      if(justPressed('ArrowUp')||justPressed('KeyW')) etymologyBookScroll=Math.max(0, etymologyBookScroll-1);
+      if(justPressed('ArrowDown')||justPressed('KeyS')) etymologyBookScroll++;
+    }
+    updateParticles(dt);
+    return;
+  }
 
   // Movement
   applyTouchMovement();
@@ -301,6 +561,7 @@ function update(dt) {
     if(isDown('KeyD')||isDown('ArrowRight')) dx=1;
   }
   if(dx!==0||dy!==0) {
+    if (!isStatueSliding()) {
     const len=Math.sqrt(dx*dx+dy*dy); dx/=len; dy/=len;
     const spd=player.speed*dt;
     const nx=player.x+dx*spd, ny=player.y+dy*spd;
@@ -315,20 +576,22 @@ function update(dt) {
       player.stepTimer=0;
       spawnParticle(player.x*TILE_SIZE,player.y*TILE_SIZE+6,'dust_step');
     }
+    }
   } else {
     player.moving=false;
     player.bobPhase+=dt*2;
+  }
+
+  if (!flags.spawnTutorialDone) {
+    updateSpawnFamilyStatues(dt);
+    clampPlayerToSpawnRoom();
   }
 
   // Interact
   if(justPressed('KeyE')) tryInteract();
 
   // Camera
-  const tx=player.x*TILE_SIZE-canvas.width/2, ty=player.y*TILE_SIZE-canvas.height/2;
-  camera.x+=(tx-camera.x)*0.1;
-  camera.y+=(ty-camera.y)*0.1;
-  camera.x=Math.max(0,Math.min(mapW*TILE_SIZE-canvas.width,camera.x));
-  camera.y=Math.max(0,Math.min(mapH*TILE_SIZE-canvas.height,camera.y));
+  updateGameCamera(dt);
 
   // Word popup
   if(wordPopup) {
@@ -351,7 +614,8 @@ function updateArea() {
   if(a!==currentArea) currentArea=a;
   // Smooth tint lerp
   let tr=0,tg=0,tb=0,ta=0;
-  if(currentArea.includes('Shrine'))         { tr=15;tg=10;tb=5;ta=0.1; }
+  if(currentArea.includes('Chamber'))        { tr=8;tg=6;tb=12;ta=0.14; }
+  else if(currentArea.includes('Shrine'))         { tr=15;tg=10;tb=5;ta=0.1; }
   else if(currentArea.includes('Jaṅgala'))        { tr=0;tg=20;tb=0;ta=0.12; }
   else if(currentArea.includes('Monastery')) { tr=20;tg=15;tb=0;ta=0.08; }
   else if(currentArea.includes('Lake'))      { tr=0;tg=5;tb=25;ta=0.08; }
@@ -469,10 +733,15 @@ function renderParticles() {
 function isSolid(tx,ty) {
   if(tx<0||ty<0||tx>=mapW||ty>=mapH) return true;
   if (introActive && introStatueBlocks(tx, ty)) return true;
+  if (isInSpawnTutorial() && spawnFamilyStatueBlocks(tx, ty)) return true;
   return SOLID.has(map[ty][tx]);
 }
 function canMoveTo(x,y) {
-  const hw=0.3,hh=0.35;
+  const hw = PLAYER_HW, hh = PLAYER_HH;
+  if (isInSpawnTutorial()) {
+    const b = flags.spawnMotherDone ? spawnTutorialBounds() : spawnRoomInteriorBounds();
+    if (x - hw < b.x || x + hw >= b.x + b.w || y - hh < b.y || y + hh >= b.y + b.h) return false;
+  }
   return !isSolid(Math.floor(x-hw),Math.floor(y-hh))&&!isSolid(Math.floor(x+hw),Math.floor(y-hh))&&
          !isSolid(Math.floor(x-hw),Math.floor(y+hh))&&!isSolid(Math.floor(x+hw),Math.floor(y+hh));
 }
@@ -482,6 +751,28 @@ function tryInteract() {
   if (introActive) { tryIntroInteract(); return; }
   const nearby=getNearby();
   if(!nearby) return;
+  if (nearby.type === 'mother') { trySpawnMotherInteract(); return; }
+  if (nearby.type === 'spawnDoor') {
+    if (flags.spawnMotherDone) return;
+    if (!spawnTutorial.doorTried) {
+      spawnTutorial.doorTried = true;
+      spawnTutorial.step = 'mother';
+      showIntroMessage(SPAWN_TUTORIAL.doorFail);
+    } else {
+      showIntroMessage('The stone door will not budge. The silent figure in the room may know why…');
+    }
+    return;
+  }
+  if (nearby.type === 'hallBrother') { trySpawnFamilyStatueInteract('brother'); return; }
+  if (nearby.type === 'hallSister') { trySpawnFamilyStatueInteract('sister'); return; }
+  if (nearby.type === 'father') { trySpawnFatherInteract(); return; }
+  if (nearby.type === 'hallDoor') {
+    if (!flags.spawnTutorialDone) {
+      showIntroMessage('The outer seal holds fast. The Father statue may know the way out.');
+    }
+    return;
+  }
+  if (nearby.type === 'hallPainting') { tryHallPaintingInteract(nearby.target.id); return; }
   if(nearby.type==='npc') {
     const dlg=getDialogue(nearby.target.id,stateObj());
     dlg.speaker=nearby.target.name;
@@ -501,6 +792,8 @@ function tryInteract() {
 
 function getNearby() {
   if (introActive) return getIntroNearby();
+  const spawnNear = getSpawnNearby();
+  if (spawnNear) return spawnNear;
   let best=null,bestDist=2.0;
   for(const npc of NPCS) {
     const d=dist(player.x,player.y,npc.x+0.5,npc.y+0.5);
@@ -580,12 +873,18 @@ function discoverWord(wordId) {
   const w=WORDS[wordId];
   if(!w)return;
   discoveredWords.add(wordId);
+  discoverEtymology(wordId);
   const popup={word:w,id:wordId,timer:5,slide:0};
   if(wordPopup) wordPopupQueue.push(popup);
   else wordPopup=popup;
   // Discovery feedback — flash and subtle shake
   screenFlash = { alpha: 0.25, color: '#ffd700' };
   cameraShake.intensity = Math.max(cameraShake.intensity, 3);
+}
+
+function discoverEtymology(loreId) {
+  if (!loreId || !ETYMOLOGY_LORE[loreId] || discoveredEtymology.has(loreId)) return;
+  discoveredEtymology.add(loreId);
 }
 
 // ─── MINIMAP ───
@@ -595,7 +894,8 @@ function buildMinimap() {
   const mx=mc.getContext('2d');
   const c={[T.GRASS]:'#4a8c3f',[T.GRASS2]:'#3f7a35',[T.PATH]:'#c4a76c',[T.WATER]:'#3a80c4',[T.TREE]:'#2a6a1a',
     [T.WALL]:'#7a7068',[T.FLOOR]:'#c8b896',[T.SAND]:'#e0d48c',[T.MOUNTAIN]:'#5a5a5a',[T.BRIDGE]:'#9a7b5b',
-    [T.FLOWERS]:'#e88aac',[T.TALL_GRASS]:'#3a7a2f',[T.CROPS]:'#8B7355',[T.DOOR]:'#8a6a3a',[T.FENCE]:'#7a5a2a',[T.BUSH]:'#2a5a1a'};
+    [T.FLOWERS]:'#e88aac',[T.TALL_GRASS]:'#3a7a2f',[T.CROPS]:'#8B7355',[T.DOOR]:'#8a6a3a',[T.FENCE]:'#7a5a2a',[T.BUSH]:'#2a5a1a',
+    [T.FLOOR_TRACK_H]:'#b8a880',[T.FLOOR_TRACK_V]:'#b8a880',[T.FLOOR_TRACK_X]:'#b8a880'};
   for(let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++) {
     mx.fillStyle=c[map[y][x]]||'#111';
     mx.fillRect(x,y,1,1);
@@ -612,20 +912,24 @@ function render() {
 
   if(!gameStarted) { renderTitle(); return; }
 
-  // Save for camera transform
   ctx.save();
-  ctx.translate(-cameraShake.x,-cameraShake.y);
-
-  renderMap();
-  if (introActive) {
-    renderIntroScene();
+  ctx.translate(-cameraShake.x, -cameraShake.y);
+  if (isSpawnChamberZoom()) {
+    renderSpawnChamberZoomed();
   } else {
-    renderGroundItems();
-    renderInteractPoints();
-    renderNPCs();
+    renderMap();
+    if (introActive) {
+      renderIntroScene();
+    } else {
+      renderGroundItems();
+      renderInteractPoints();
+      renderNPCs();
+      renderMotherStatueEntity();
+      renderSpawnFamilyScene();
+      if (!flags.spawnTutorialDone) renderSpawnLockedDoorWorld();
+    }
+    renderPlayer();
   }
-  renderPlayer();
-
   ctx.restore();
 
   // Overlays (screen-space)
@@ -641,6 +945,7 @@ function render() {
   renderQuizOverlay();
   if(showInventory) renderInventoryPanel();
   if(showLexicon) renderLexiconPanel();
+  if(showEtymologyBook) renderEtymologyBookPanel();
   renderScreenFlash();
   if (!introActive) renderGlitch();
 
@@ -710,8 +1015,8 @@ function renderTitle() {
   // Controls
   ctx.font=`13px ${FONT_FANTASY}`;
   ctx.fillStyle='#555';
-  ctx.fillText('WASD or touch to move  ·  E or tap to interact  ·  I inventory  ·  L lexicon',cx,cy-12);
-  ctx.fillText('?play skips title  ·  Esc skips Family Shrine (after you begin)',cx,cy+4);
+  ctx.fillText('WASD or touch to move  ·  E or tap to interact  ·  I inventory  ·  L lexicon  ·  B etymology book',cx,cy-12);
+  ctx.fillText('?play skips title',cx,cy+4);
   // Pulsing prompt
   const a=0.5+0.5*Math.sin(time*3);
   ctx.globalAlpha=a;
@@ -726,16 +1031,208 @@ function renderTitle() {
 }
 
 // ─── MAP ───
+function getCameraViewSize() {
+  const z = getWorldZoom();
+  return { w: canvas.width / z, h: canvas.height / z };
+}
+
+function renderSpawnChamberZoomed() {
+  const z = SPAWN_ZOOM;
+  const vw = canvas.width / z, vh = canvas.height / z;
+  const wx = camera.x + vw / 2;
+  const wy = camera.y + vh / 2;
+
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.scale(z, z);
+  ctx.translate(-wx, -wy);
+
+  renderInWorldSpace = true;
+  renderMapTilesWorld(wx, wy, z);
+  renderMotherStatueEntity();
+  renderSpawnFamilyScene();
+  renderSpawnLockedDoorWorld();
+  renderPlayer();
+  renderInWorldSpace = false;
+  ctx.restore();
+
+  renderSpawnChamberVignette(z, wx, wy);
+}
+
+function renderMapTilesWorld(focusX, focusY, z) {
+  const viewW = canvas.width / z;
+  const viewH = canvas.height / z;
+  const margin = 2;
+  const sc = Math.floor((focusX - viewW / 2) / TILE_SIZE) - margin;
+  const sr = Math.floor((focusY - viewH / 2) / TILE_SIZE) - margin;
+  const ec = Math.ceil((focusX + viewW / 2) / TILE_SIZE) + margin;
+  const er = Math.ceil((focusY + viewH / 2) / TILE_SIZE) + margin;
+  for (let row = sr; row <= er; row++) {
+    for (let col = sc; col <= ec; col++) {
+      if (col < 0 || col >= mapW || row < 0 || row >= mapH) continue;
+      const tile = map[row]?.[col];
+      if (tile === undefined) continue;
+      drawTile(tile, col * TILE_SIZE, row * TILE_SIZE, col, row);
+    }
+  }
+}
+
+function renderSpawnChamberVignette(z, focusX, focusY) {
+  const pad = 12;
+  const toScreen = (px, py) => ({
+    x: (px - focusX) * z + canvas.width / 2,
+    y: (py - focusY) * z + canvas.height / 2,
+  });
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const addRoom = (R, owFn) => {
+    const { w: ow, h: oh } = owFn();
+    minX = Math.min(minX, R.x * TILE_SIZE - pad);
+    minY = Math.min(minY, R.y * TILE_SIZE - pad);
+    maxX = Math.max(maxX, (R.x + ow) * TILE_SIZE + pad);
+    maxY = Math.max(maxY, (R.y + oh) * TILE_SIZE + pad);
+  };
+  addRoom(SPAWN_ROOM, spawnRoomOuterSize);
+  if (flags.spawnMotherDone) addRoom(FAMILY_HALL, familyHallOuterSize);
+  const tl = toScreen(minX, minY);
+  const br = toScreen(maxX, maxY);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, 0, canvas.width, Math.max(0, tl.y));
+  ctx.fillRect(0, br.y, canvas.width, Math.max(0, canvas.height - br.y));
+  ctx.fillRect(0, tl.y, Math.max(0, tl.x), br.y - tl.y);
+  ctx.fillRect(br.x, tl.y, Math.max(0, canvas.width - br.x), br.y - tl.y);
+}
+
+function renderMotherStatueEntity() {
+  const m = SPAWN_ROOM.mother;
+  drawShrineStatue('mother', m.x, m.y, flags.spawnMotherDone, m.name);
+}
+
+function drawShrineStatue(kind, tx, ty, lit, label) {
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  const cx = tx * TILE_SIZE - camX;
+  const cy = ty * TILE_SIZE - camY;
+  const bob = Math.sin(time * 1.5 + tx * 0.7) * 0.4;
+  const stone = lit ? '#8a8580' : '#6a6860';
+  const headStone = lit ? '#a8a8a8' : '#8a8880';
+  const gold = lit ? '#D4AF37' : '#6a5a30';
+
+  if (!lit && kind === 'mother') {
+    const pulse = 0.12 + 0.08 * Math.sin(time * 2);
+    const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 28);
+    grad.addColorStop(0, `rgba(255, 215, 0, ${pulse + 0.1})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - 28, cy - 28, 56, 56);
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 14, 11, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = stone;
+  const bodyY = cy - 4 + bob;
+  ctx.fillRect(cx - 8, bodyY, 16, 18);
+  ctx.fillRect(cx - 10, bodyY + 14, 20, 6);
+
+  ctx.fillStyle = headStone;
+  ctx.beginPath();
+  ctx.arc(cx, cy - 6 + bob, 7, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = gold;
+  if (kind === 'father') {
+    ctx.fillRect(cx + 8, cy - 18 + bob, 3, 16);
+    ctx.beginPath();
+    ctx.arc(cx + 9, cy - 20 + bob, 3, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === 'brother') {
+    ctx.fillRect(cx + 6, cy - 8 + bob, 8, 2);
+  } else if (kind === 'sister') {
+    ctx.fillRect(cx - 5, cy - 12 + bob, 10, 3);
+  } else {
+    ctx.fillRect(cx - 2, cy - 14 + bob, 4, 8);
+  }
+
+  ctx.fillStyle = '#333';
+  const lookX = spawnCamera.mode === 'statue' && spawnCamera.x === tx ? player.x : player.x;
+  const lookY = spawnCamera.mode === 'statue' && spawnCamera.y === ty ? player.y : player.y;
+  const ea = Math.atan2(lookY - ty, lookX - tx);
+  ctx.fillRect(cx - 3 + Math.cos(ea) * 1.5, cy - 7 + bob + Math.sin(ea), 2, 2);
+  ctx.fillRect(cx + 1 + Math.cos(ea) * 1.5, cy - 7 + bob + Math.sin(ea), 2, 2);
+
+  const devLabels = { mother: 'मातृ', father: 'पितृ', brother: 'भ्रातृ', sister: 'स्वसृ' };
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = lit ? 2 : 1;
+  ctx.strokeRect(cx - 12, cy - 16 + bob, 24, 34);
+
+  if (label && dist(player.x, player.y, tx, ty) < 2.5) {
+    ctx.font = `600 10px ${FONT_FALLBACK}`;
+    const tw = ctx.measureText(label).width + 10;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(cx - tw / 2, cy - 28, tw, 14);
+    ctx.fillStyle = lit ? '#ffd700' : '#ccc';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx, cy - 18);
+    ctx.textAlign = 'left';
+  }
+
+  ctx.fillStyle = lit ? '#ffd700' : '#888';
+  ctx.font = `14px ${FONT_FALLBACK}`;
+  ctx.textAlign = 'center';
+  ctx.fillText(devLabels[kind] || '', cx, cy + 26 + bob);
+  ctx.textAlign = 'left';
+}
+
+function renderSpawnLockedDoorWorld() {
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  const pulse = 0.25 + 0.2 * Math.sin(time * 2.5);
+  if (!flags.spawnMotherDone) {
+    const d = SPAWN_ROOM.door;
+    const sx = d.x * TILE_SIZE - camX;
+    const sy = d.y * TILE_SIZE - camY;
+    ctx.fillStyle = `rgba(120, 40, 40, ${pulse})`;
+    ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+    ctx.strokeStyle = '#884444';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx + 5, sy + 5, TILE_SIZE - 10, TILE_SIZE - 10);
+  }
+  if (flags.spawnMotherDone && !flags.spawnTutorialDone) {
+    const d = FAMILY_HALL.southDoor;
+    const sx = d.x * TILE_SIZE - camX;
+    const sy = d.y * TILE_SIZE - camY;
+    ctx.fillStyle = `rgba(80, 50, 120, ${pulse})`;
+    ctx.fillRect(sx + 3, sy + 3, TILE_SIZE - 6, TILE_SIZE - 6);
+    ctx.strokeStyle = '#664488';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx + 5, sy + 5, TILE_SIZE - 10, TILE_SIZE - 10);
+  }
+}
+
 function renderMap() {
-  const sc=Math.floor(camera.x/TILE_SIZE)-1, sr=Math.floor(camera.y/TILE_SIZE)-1;
-  const ec=Math.ceil((camera.x+canvas.width)/TILE_SIZE)+1, er=Math.ceil((camera.y+canvas.height)/TILE_SIZE)+1;
-  for(let row=sr;row<=er;row++) for(let col=sc;col<=ec;col++) {
+  const view = getCameraViewSize();
+  const sc = Math.floor(camera.x / TILE_SIZE) - 1;
+  const sr = Math.floor(camera.y / TILE_SIZE) - 1;
+  const ec = Math.ceil((camera.x + view.w) / TILE_SIZE) + 1;
+  const er = Math.ceil((camera.y + view.h) / TILE_SIZE) + 1;
+  for (let row = sr; row <= er; row++) for (let col = sc; col <= ec; col++) {
     if(col<0||col>=mapW||row<0||row>=mapH) continue;
     const tile=map[row]?.[col];
     if(tile===undefined) continue;
     const sx=Math.floor(col*TILE_SIZE-camera.x), sy=Math.floor(row*TILE_SIZE-camera.y);
     drawTile(tile,sx,sy,col,row);
   }
+}
+
+function drawStoneFloor(x, y, s, col, row) {
+  ctx.fillStyle='#c8b896';ctx.fillRect(x,y,s,s);
+  ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=1;
+  ctx.strokeRect(x+1,y+1,s-2,s-2);
+  ctx.fillStyle='rgba(160,130,80,0.15)';
+  ctx.fillRect(x+4,y+8,s-8,1);
+  ctx.fillRect(x+6,y+20,s-12,1);
 }
 
 function drawTile(tile,x,y,col,row) {
@@ -821,13 +1318,27 @@ function drawTile(tile,x,y,col,row) {
       ctx.fillRect(x,y,s,2);
       break;
     case T.FLOOR:
-      ctx.fillStyle='#c8b896';ctx.fillRect(x,y,s,s);
-      ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=1;
-      ctx.strokeRect(x+1,y+1,s-2,s-2);
-      // Wood grain
-      ctx.fillStyle='rgba(160,130,80,0.15)';
-      ctx.fillRect(x+4,y+8,s-8,1);
-      ctx.fillRect(x+6,y+20,s-12,1);
+      drawStoneFloor(x, y, s, col, row);
+      break;
+    case T.FLOOR_TRACK_H:
+      drawStoneFloor(x, y, s, col, row);
+      ctx.fillStyle='#2a2520';
+      ctx.fillRect(x + s / 2 - 6, y + s / 2 - 1, 12, 2);
+      ctx.fillStyle='rgba(0,0,0,0.12)';
+      ctx.fillRect(x + s / 2 - 6, y + s / 2 + 1, 12, 1);
+      break;
+    case T.FLOOR_TRACK_V:
+      drawStoneFloor(x, y, s, col, row);
+      ctx.fillStyle='#2a2520';
+      ctx.fillRect(x + s / 2 - 1, y + s / 2 - 6, 2, 12);
+      ctx.fillStyle='rgba(0,0,0,0.12)';
+      ctx.fillRect(x + s / 2 + 1, y + s / 2 - 6, 1, 12);
+      break;
+    case T.FLOOR_TRACK_X:
+      drawStoneFloor(x, y, s, col, row);
+      ctx.fillStyle='#2a2520';
+      ctx.fillRect(x + s / 2 - 6, y + s / 2 - 1, 12, 2);
+      ctx.fillRect(x + s / 2 - 1, y + s / 2 - 6, 2, 12);
       break;
     case T.SAND:
       ctx.fillStyle='#e0d48c';ctx.fillRect(x,y,s,s);
@@ -1042,8 +1553,10 @@ function hasQuestAvailable(npcId) {
 }
 
 function renderPlayer() {
-  const sx=Math.floor(player.x*TILE_SIZE-camera.x);
-  const sy=Math.floor(player.y*TILE_SIZE-camera.y);
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  const sx=Math.floor(player.x*TILE_SIZE-camX);
+  const sy=Math.floor(player.y*TILE_SIZE-camY);
   const bob=player.moving?Math.sin(player.bobPhase)*2:Math.sin(time*2)*0.5;
   const legPhase=player.moving?Math.sin(player.bobPhase*1.2):0;
   // Shadow
@@ -1137,15 +1650,39 @@ function renderInteractPrompt() {
   let tx,ty,label;
   if(nearby.type==='npc'){tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
   else if(nearby.type==='item'){const it=ITEMS[nearby.target.itemId];tx=nearby.target.x;ty=nearby.target.y;label=it?it.name:'Item';}
-  else if(nearby.type==='mother'){tx=INTRO_LAYOUT.mother.x;ty=INTRO_LAYOUT.mother.y;label='Mother statue';}
+  else if(nearby.type==='mother'){
+    if (introActive) { tx=INTRO_LAYOUT.mother.x; ty=INTRO_LAYOUT.mother.y; label='Mother statue'; }
+    else { tx=SPAWN_ROOM.mother.x; ty=SPAWN_ROOM.mother.y; label=SPAWN_ROOM.mother.name; }
+  }
+  else if(nearby.type==='spawnDoor'){tx=SPAWN_ROOM.door.x+0.5;ty=SPAWN_ROOM.door.y+0.5;label='Sealed door';}
+  else if(nearby.type==='hallBrother'){tx=spawnFamily.brother.x;ty=spawnFamily.brother.y;label='Brother statue';}
+  else if(nearby.type==='hallSister'){tx=spawnFamily.sister.x;ty=spawnFamily.sister.y;label='Sister statue';}
+  else if(nearby.type==='father'){tx=FAMILY_HALL.father.x;ty=FAMILY_HALL.father.y;label=FAMILY_HALL.father.name;}
+  else if(nearby.type==='hallDoor'){tx=FAMILY_HALL.southDoor.x+0.5;ty=FAMILY_HALL.southDoor.y+0.5;label='Sealed exit';}
   else if(nearby.type==='father'){tx=INTRO_LAYOUT.father.x;ty=INTRO_LAYOUT.father.y;label='Father statue';}
   else if(nearby.type==='brother'){tx=nearby.target.x;ty=nearby.target.y;label='Brother statue';}
   else if(nearby.type==='sister'){tx=nearby.target.x;ty=nearby.target.y;label='Sister statue';}
+  else if(nearby.type==='hallPainting'){tx=nearby.target.ix;ty=nearby.target.iy;label=nearby.target.name;}
   else if(nearby.type==='bonus'){const ids={quilt:'Maternal quilt',matrix:'Matrix painting',mammal:'Cow painting'};tx=INTRO_LAYOUT[nearby.target].x;ty=INTRO_LAYOUT[nearby.target].y;label=ids[nearby.target]||'Painting';}
   else if(nearby.type==='exit'){tx=INTRO_LAYOUT.exit.x;ty=INTRO_LAYOUT.exit.y;label='Path outside';}
   else{tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
-  const sx=tx*TILE_SIZE-camera.x+TILE_SIZE/2+cameraShake.x;
-  const sy=ty*TILE_SIZE-camera.y-14+Math.sin(time*3)*2+cameraShake.y;
+  const centerCoord = (nearby.type === 'mother' && !introActive) || nearby.type === 'spawnDoor'
+    || nearby.type === 'hallBrother' || nearby.type === 'hallSister' || nearby.type === 'father'
+    || nearby.type === 'hallDoor' || nearby.type === 'hallPainting';
+  const wx = centerCoord ? tx * TILE_SIZE : (tx + 0.5) * TILE_SIZE;
+  const wy = centerCoord ? ty * TILE_SIZE : (ty + 0.5) * TILE_SIZE;
+  let sx, sy;
+  if (isSpawnChamberZoom()) {
+    const z = SPAWN_ZOOM;
+    const vw = canvas.width / z, vh = canvas.height / z;
+    const fx = camera.x + vw / 2;
+    const fy = camera.y + vh / 2;
+    sx = (wx - fx) * z + canvas.width / 2 + cameraShake.x;
+    sy = (wy - fy) * z + canvas.height / 2 - 14 + Math.sin(time * 3) * 2 + cameraShake.y;
+  } else {
+    sx = wx - camera.x + cameraShake.x;
+    sy = wy - camera.y - 14 + Math.sin(time * 3) * 2 + cameraShake.y;
+  }
   ctx.textAlign='center';
   // Use fallback font if label contains Sanskrit characters
   if(hasSanskritChars(label)) {
@@ -1195,6 +1732,17 @@ function renderHUD() {
     return;
   }
 
+  if (!flags.spawnTutorialDone && playerInSpawnTutorial()) {
+    const hint = getSpawnTutorialHint();
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `600 12px ${FONT_FALLBACK}`;
+    ctx.fillText('Tutorial — Mother\'s Chamber', 12, 19);
+    ctx.fillStyle = '#888';
+    ctx.font = `11px ${FONT_FANTASY}`;
+    ctx.fillText(hint || 'Explore the chamber', 12, 34);
+    return;
+  }
+
   const loc=getLocationName(player.x,player.y);
   ctx.fillStyle='#ffd700';
   // Use fallback font if location name contains Sanskrit characters
@@ -1227,13 +1775,15 @@ function renderHUD() {
   }
   ctx.fillStyle='#888';ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillText(`📖 ${discoveredWords.size}/${Object.keys(WORDS).length}`,dx+148,19);
+  ctx.fillStyle='#888';ctx.font='11px sans-serif';
+  ctx.fillText(`📜 ${discoveredEtymology.size}`,dx+228,19);
 
   // Bottom bar
   const bg=ctx.createLinearGradient(0,canvas.height-24,0,canvas.height);
   bg.addColorStop(0,'transparent');bg.addColorStop(1,'rgba(0,0,0,0.5)');
   ctx.fillStyle=bg;ctx.fillRect(0,canvas.height-24,canvas.width,24);
   ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText('WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  L: Lexicon',12,canvas.height-7);
+  ctx.fillText('WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  L: Lexicon  ·  B: Etymology Book',12,canvas.height-7);
 
   // Quest panel
   if(flags.metGuru&&!flags.gameComplete) {
@@ -1272,6 +1822,7 @@ function getLocationName(px,py) {
     if (!intro.exitOpen) return 'Family Shrine — Hall of Kin';
     return 'Family Shrine — Threshold';
   }
+  if (!flags.spawnTutorialDone && playerInSpawnTutorial()) return "Tutorial — Family Shrine";
   if(px>30&&px<52&&py>24&&py<38) return 'Siṃhapura Village';
   if(px>4&&px<28&&py>22&&py<42) return "Vrīhi's Farm";
   if(px>30&&px<54&&py>4&&py<20) return 'Bodhi Monastery';
@@ -1283,7 +1834,7 @@ function getLocationName(px,py) {
 
 // ─── MINIMAP ───
 function renderMinimap() {
-  if(!minimap||!gameStarted||introActive) return;
+  if(!minimap||!gameStarted||introActive||isSpawnChamberZoom()) return;
   const mw=100,mh=75,mx=canvas.width-mw-8,my=canvas.height-mh-28;
   // Bg
   ctx.fillStyle='rgba(0,0,0,0.5)';
@@ -1571,26 +2122,510 @@ function renderLexiconPanel() {
   }
 }
 
+// ─── ETYMOLOGY BOOK PANEL ───
+function renderEtymologyBookPanel() {
+  const pw = 640, ph = 480, px = (canvas.width - pw) / 2, py = (canvas.height - ph) / 2;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(12,12,30,0.96)'; roundRect(ctx, px, py, pw, ph, 6); ctx.fill();
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1; roundRect(ctx, px, py, pw, ph, 6); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,215,0,0.1)'; ctx.fillRect(px + 1, py + 1, pw - 2, 28);
+  ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
+  ctx.fillText(`📜 Etymology Book (${discoveredEtymology.size}/${Object.keys(ETYMOLOGY_LORE).length})`, px + 16, py + 25);
+  ctx.fillStyle = '#666'; ctx.font = `11px ${FONT_FANTASY}`;
+  ctx.fillText('[B] close · ↑↓ scroll', px + pw - 130, py + 25);
+
+  if (discoveredEtymology.size === 0) {
+    ctx.fillStyle = '#555'; ctx.font = `${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
+    ctx.fillText('No stories yet. Press E on paintings and statues in the family hall.', px + 20, py + 80);
+    return;
+  }
+
+  const entries = [...discoveredEtymology].map(id => ETYMOLOGY_LORE[id]).filter(Boolean);
+  const rowH = 88;
+  const viewTop = py + 40;
+  const viewH = ph - 52;
+  const maxScroll = Math.max(0, entries.length * rowH - viewH);
+  etymologyBookScroll = Math.max(0, Math.min(etymologyBookScroll, Math.ceil(maxScroll / rowH)));
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(px + 8, viewTop, pw - 16, viewH); ctx.clip();
+  let iy = viewTop - etymologyBookScroll * rowH;
+  for (const lore of entries) {
+    if (iy + rowH >= viewTop && iy <= viewTop + viewH) {
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.fillRect(px + 12, iy, pw - 24, rowH - 8);
+      ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 14px ${FONT_FANTASY}`;
+      ctx.fillText(lore.title, px + 20, iy + 18);
+      ctx.fillStyle = '#c9a227'; ctx.font = `600 11px ${FONT_FALLBACK}`;
+      ctx.fillText(`root: ${lore.root}`, px + 20, iy + 34);
+      ctx.fillStyle = '#bbb'; ctx.font = `12px ${FONT_FANTASY}`;
+      wrapText(lore.text, px + 20, iy + 50, pw - 48, 14, 3);
+    }
+    iy += rowH;
+  }
+  ctx.restore();
+}
+
+function wrapText(text, x, y, maxW, lineH, maxLines) {
+  const words = text.split(' ');
+  let line = '';
+  let lines = 0;
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, y);
+      y += lineH;
+      lines++;
+      line = word;
+      if (lines >= maxLines - 1) {
+        ctx.fillText(line.length > 42 ? line.slice(0, 39) + '…' : line, x, y);
+        return;
+      }
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, y);
+}
+
+function tryHallPaintingInteract(id) {
+  if (quizState || introMsg || isStatueSliding()) return;
+  const lore = ETYMOLOGY_LORE[id];
+  if (!lore) return;
+  const firstTime = !discoveredEtymology.has(id);
+  discoverEtymology(id);
+  showIntroMessage(
+    lore.text,
+    firstTime ? () => showIntroMessage('Saved to your Etymology Book. Press B to read it anytime.') : null,
+  );
+  if (firstTime) screenFlash = { alpha: 0.18, color: '#ffd700' };
+}
+
+function drawHallPainting(id, wall, wx, wy) {
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  const s = TILE_SIZE;
+  const tileX = wx * s - camX;
+  const tileY = wy * s - camY;
+  const lit = discoveredEtymology.has(id);
+  let cx, cy;
+  if (wall === 'east') {
+    cx = tileX + 6;
+    cy = tileY + s / 2;
+  } else if (wall === 'west') {
+    cx = tileX + s - 6;
+    cy = tileY + s / 2;
+  } else if (wall === 'south') {
+    cx = tileX + s / 2;
+    cy = tileY + 6;
+  } else {
+    cx = tileX + s / 2;
+    cy = tileY + s - 6;
+  }
+  const fw = 24, fh = 30;
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(cx - fw / 2 + 2, cy - fh / 2 + 2, fw, fh);
+  ctx.fillStyle = lit ? '#5a5048' : '#4a4540';
+  ctx.fillRect(cx - fw / 2, cy - fh / 2, fw, fh);
+  ctx.strokeStyle = lit ? '#ffd700' : '#8a7a58';
+  ctx.lineWidth = lit ? 2 : 1;
+  ctx.strokeRect(cx - fw / 2, cy - fh / 2, fw, fh);
+  ctx.fillStyle = '#3a3530';
+  ctx.fillRect(cx - fw / 2 + 3, cy - fh / 2 + 3, fw - 6, fh - 6);
+  if (id === 'matrix') {
+    ctx.fillStyle = lit ? '#1a2840' : '#152030';
+    ctx.fillRect(cx - 8, cy - 10, 16, 20);
+    ctx.fillStyle = lit ? '#00ffaa' : '#3a8a70';
+    ctx.font = '7px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('MAT', cx, cy - 1);
+    ctx.fillText('RIX', cx, cy + 6);
+    ctx.textAlign = 'left';
+  } else if (id === 'maternity') {
+    ctx.fillStyle = lit ? '#6a3040' : '#4a2830';
+    ctx.fillRect(cx - 8, cy - 10, 16, 20);
+    ctx.fillStyle = lit ? '#ffd7e8' : '#c8a0a8';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 3, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(cx - 3, cy, 6, 8);
+    ctx.fillStyle = lit ? '#ffd700' : '#886644';
+    ctx.font = `8px ${FONT_FALLBACK}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('मातृ', cx, cy + 8);
+    ctx.textAlign = 'left';
+  } else if (id === 'mammal') {
+    ctx.fillStyle = lit ? '#5a4028' : '#403020';
+    ctx.fillRect(cx - 8, cy - 10, 16, 20);
+    ctx.fillStyle = lit ? '#deb887' : '#a08060';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 2, 6, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(cx + 3, cy - 4, 2, 4);
+  }
+}
+
+function renderHallPaintings() {
+  if (!flags.spawnMotherDone) return;
+  for (const p of FAMILY_HALL.paintings) {
+    drawHallPainting(p.id, p.wall, p.wx, p.wy);
+  }
+}
+
+// ═══════════════════════════════════════
+//         VILLAGE SPAWN CHAMBER
+// ═══════════════════════════════════════
+function spawnFamilyStatueBlocks(tx, ty) {
+  if (!flags.spawnMotherDone) return false;
+  const onTile = (sx, sy) => Math.floor(sx + 0.5) === tx && Math.floor(sy + 0.5) === ty;
+  const b = spawnFamily.brother;
+  if (!spawnFamily.brotherDone && onTile(b.x, b.y)) return true;
+  const s = spawnFamily.sister;
+  if (!spawnFamily.sisterDone && onTile(s.x, s.y)) return true;
+  if (spawnFamily.fatherVisible && !spawnFamily.fatherDone) {
+    const f = FAMILY_HALL.father;
+    if (onTile(f.x, f.y)) return true;
+  }
+  return false;
+}
+
+function getHallPaintingNearby(maxDist) {
+  if (!flags.spawnMotherDone || !playerInFamilyHall()) return null;
+  let best = null;
+  let bestDist = maxDist;
+  for (const p of FAMILY_HALL.paintings) {
+    const d = dist(player.x, player.y, p.ix, p.iy);
+    if (d < bestDist) {
+      bestDist = d;
+      best = { type: 'hallPainting', target: p };
+    }
+  }
+  return best;
+}
+
+function getSpawnNearby() {
+  if (flags.spawnTutorialDone) {
+    const m = SPAWN_ROOM.mother;
+    if (dist(player.x, player.y, m.x, m.y) < 1.9) {
+      return { type: 'mother', target: m };
+    }
+    if (spawnFamily.fatherVisible) {
+      const f = FAMILY_HALL.father;
+      if (dist(player.x, player.y, f.x, f.y) < 1.9) return { type: 'father', target: f };
+    }
+    const b = spawnFamily.brother;
+    if (dist(player.x, player.y, b.x, b.y) < 1.9) return { type: 'hallBrother', target: b };
+    const s = spawnFamily.sister;
+    if (dist(player.x, player.y, s.x, s.y) < 1.9) return { type: 'hallSister', target: s };
+    const painting = getHallPaintingNearby(1.9);
+    if (painting) return painting;
+    return null;
+  }
+
+  if (flags.spawnMotherDone) {
+    let best = null;
+    let bestDist = 1.9;
+    const tryPick = (type, x, y, target) => {
+      const d = dist(player.x, player.y, x, y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = { type, target };
+      }
+    };
+    const tryStatue = (type, sx, sy, sliding, done) => {
+      if (sliding || done) return;
+      tryPick(type, sx, sy, spawnFamily[type === 'hallBrother' ? 'brother' : 'sister']);
+    };
+    tryStatue('hallBrother', spawnFamily.brother.x, spawnFamily.brother.y, spawnFamily.brother.sliding, spawnFamily.brotherDone);
+    tryStatue('hallSister', spawnFamily.sister.x, spawnFamily.sister.y, spawnFamily.sister.sliding, spawnFamily.sisterDone);
+    if (spawnFamily.fatherVisible) {
+      const f = FAMILY_HALL.father;
+      tryPick('father', f.x, f.y, f);
+    }
+    for (const p of FAMILY_HALL.paintings) {
+      tryPick('hallPainting', p.ix, p.iy, p);
+    }
+    if (best) return best;
+    if (playerInFamilyHall()) {
+      const hd = FAMILY_HALL.southDoor;
+      if (!flags.spawnTutorialDone && dist(player.x, player.y, hd.x + 0.5, hd.y + 0.5) < 1.6) {
+        return { type: 'hallDoor', target: null };
+      }
+    }
+  }
+
+  const m = SPAWN_ROOM.mother;
+  if (dist(player.x, player.y, m.x, m.y) < 1.9) {
+    return { type: 'mother', target: m };
+  }
+  if (!flags.spawnMotherDone) {
+    const d = SPAWN_ROOM.door;
+    if (dist(player.x, player.y, d.x + 0.5, d.y + 0.5) < 1.6) {
+      return { type: 'spawnDoor', target: null };
+    }
+  }
+  return null;
+}
+
+function trySpawnFamilyStatueInteract(which) {
+  if (quizState || introMsg || isStatueSliding()) return;
+  const doneKey = which + 'Done';
+  if (spawnFamily[doneKey]) {
+    showIntroMessage(which === 'brother' ? INTRO_ETYM.brother : INTRO_ETYM.sister);
+    return;
+  }
+  slideSpawnFamilyStatue(which);
+}
+
+function slideSpawnFamilyStatue(which) {
+  if (!flags.spawnMotherDone) return;
+  const s = spawnFamily[which];
+  const cfg = FAMILY_HALL[which];
+  if (s.sliding || spawnFamily[which + 'Done']) return;
+  s.sliding = true;
+  s.path = cfg.path.map(p => ({ x: p.x, y: p.y }));
+  s.pathIdx = 1;
+  s.segT = 0;
+  spawnCamera = { mode: 'statue', x: s.x, y: s.y };
+}
+
+function onSpawnStatueArrived(which) {
+  const s = spawnFamily[which];
+  s.sliding = false;
+  s.path = null;
+  spawnFamily[which + 'Done'] = true;
+  if (which === 'brother') discoverWord('bhrata');
+  else discoverWord('svasar');
+  spawnCamera = { mode: 'statue', x: s.x, y: s.y };
+  screenFlash = { alpha: 0.25, color: '#ffd700' };
+  repaintFamilyHallTracks(map, !spawnFamily.brotherDone, !spawnFamily.sisterDone);
+  showIntroMessage(
+    which === 'brother' ? INTRO_ETYM.brother : INTRO_ETYM.sister,
+    tryRevealSpawnFather,
+  );
+}
+
+function tryRevealSpawnFather() {
+  if (spawnFamily.brotherDone && spawnFamily.sisterDone && !spawnFamily.fatherVisible) {
+    spawnFamily.fatherVisible = true;
+    showIntroChain([
+      'Brother and Sister glow gold in their niches.',
+      'The family whole again. The Father stirs from the stone beside the sealed exit…',
+    ]);
+    screenFlash = { alpha: 0.25, color: '#ffd700' };
+  }
+}
+
+function updateSpawnFamilyStatues(dt) {
+  if (!flags.spawnMotherDone || flags.spawnTutorialDone) return;
+  for (const which of ['brother', 'sister']) {
+    const s = spawnFamily[which];
+    if (!s.sliding || !s.path || s.pathIdx >= s.path.length) continue;
+    const from = s.path[s.pathIdx - 1];
+    const to = s.path[s.pathIdx];
+    const segLen = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
+    if (segLen < 0.01) {
+      s.pathIdx++;
+      s.segT = 0;
+      continue;
+    }
+    s.segT += STATUE_TRACK_SPEED * dt / segLen;
+    const t = Math.min(1, s.segT);
+    s.x = from.x + (to.x - from.x) * t;
+    s.y = from.y + (to.y - from.y) * t;
+    spawnCamera.x = s.x;
+    spawnCamera.y = s.y;
+    if (t >= 1) {
+      s.x = to.x;
+      s.y = to.y;
+      s.pathIdx++;
+      s.segT = 0;
+      if (s.pathIdx >= s.path.length) {
+        onSpawnStatueArrived(which);
+      }
+    }
+  }
+}
+
+function renderSpawnFamilyScene() {
+  if (!flags.spawnMotherDone && !flags.spawnTutorialDone) return;
+  renderHallDestinationMarks();
+  renderHallPaintings();
+  if (flags.spawnMotherDone) {
+    drawShrineStatue('brother', spawnFamily.brother.x, spawnFamily.brother.y, spawnFamily.brotherDone, 'Brother statue');
+    drawShrineStatue('sister', spawnFamily.sister.x, spawnFamily.sister.y, spawnFamily.sisterDone, 'Sister statue');
+    if (spawnFamily.fatherVisible) {
+      const f = FAMILY_HALL.father;
+      drawShrineStatue('father', f.x, f.y, spawnFamily.fatherDone, f.name);
+    }
+  }
+}
+
+function renderHallDestinationMarks() {
+  if (!flags.spawnMotherDone || flags.spawnTutorialDone) return;
+  if (spawnFamily.brotherDone && spawnFamily.sisterDone) return;
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  const drawMark = (tx, ty, done) => {
+    const sx = tx * TILE_SIZE + TILE_SIZE / 2 - camX;
+    const sy = ty * TILE_SIZE + TILE_SIZE / 2 - camY;
+    const pulse = 0.25 + 0.2 * Math.sin(time * 3 + tx);
+    ctx.fillStyle = done ? 'rgba(255,215,0,0.12)' : `rgba(255,215,0,${pulse * 0.35})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = done ? '#886622' : '#ffd700';
+    ctx.lineWidth = done ? 1 : 2;
+    ctx.stroke();
+    if (!done) {
+      ctx.fillStyle = `rgba(255,215,0,${0.5 + pulse * 0.3})`;
+      ctx.font = `11px ${FONT_FANTASY}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('◎', sx, sy + 4);
+      ctx.textAlign = 'left';
+    }
+  };
+  if (!spawnFamily.brotherDone) {
+    drawMark(FAMILY_HALL.brotherMark.x, FAMILY_HALL.brotherMark.y, false);
+  }
+  if (!spawnFamily.sisterDone) {
+    drawMark(FAMILY_HALL.sisterMark.x, FAMILY_HALL.sisterMark.y, false);
+  }
+}
+
+function trySpawnMotherInteract() {
+  if (quizState) return;
+  if (flags.spawnMotherDone) {
+    showIntroMessage(MOTHER_QUIZ.etym);
+    return;
+  }
+  if (spawnTutorial.step === 'door' || !spawnTutorial.doorTried) {
+    showIntroMessage(SPAWN_TUTORIAL.motherEarly);
+    return;
+  }
+  openQuiz({
+    q: MOTHER_QUIZ.q,
+    opts: MOTHER_QUIZ.opts,
+    ok: MOTHER_QUIZ.ok,
+    wrongHint: MOTHER_QUIZ.wrongHint,
+    onCorrect: unlockMotherChamber,
+  });
+}
+
+function trySpawnFatherInteract() {
+  if (quizState || introMsg || isStatueSliding()) return;
+  if (spawnFamily.fatherDone) {
+    showIntroMessage(FATHER_QUIZ.etym);
+    return;
+  }
+  if (!spawnFamily.fatherVisible) return;
+  if (!spawnFamily.brotherDone || !spawnFamily.sisterDone) {
+    showIntroMessage('The Brother and Sister must stand in their places before the Father will speak.');
+    return;
+  }
+  openQuiz({
+    q: FATHER_QUIZ.q,
+    opts: FATHER_QUIZ.opts,
+    ok: FATHER_QUIZ.ok,
+    wrongHint: 'Try again…',
+    onCorrect: unlockFamilyHall,
+  });
+}
+
+function unlockMotherChamber() {
+  flags.spawnMotherDone = true;
+  applySpawnChambers(map, { motherDoorOpen: true, hallDoorOpen: false });
+  discoverWord('matri');
+  spawnTutorial.step = 'hall';
+  showIntroChain([
+    MOTHER_QUIZ.etym,
+    'The inner seal breaks. Walk south into the hall of kin.',
+    SPAWN_TUTORIAL.hallGuide1,
+    SPAWN_TUTORIAL.hallGuide2,
+    SPAWN_TUTORIAL.hallGuide3,
+    SPAWN_TUTORIAL.hallGuide4,
+  ]);
+  screenFlash = { alpha: 0.35, color: '#ffd700' };
+  const s = SPAWN_ROOM.mother;
+  for (let i = 0; i < 12; i++) {
+    spawnParticle(s.x * TILE_SIZE, s.y * TILE_SIZE, 'sparkle');
+  }
+}
+
+function unlockFamilyHall() {
+  spawnFamily.fatherDone = true;
+  applySpawnChambers(map, { motherDoorOpen: true, hallDoorOpen: true });
+  discoverWord('pitri');
+  spawnTutorial.step = 'guru';
+  showIntroChain([
+    FATHER_QUIZ.etym,
+    'The outer seal shatters.',
+    'Walk south into Siṃhapura — find Guru Vidya at the village crossroads.',
+  ], () => {
+    flags.spawnTutorialDone = true;
+    spawnTutorial.step = 'done';
+    snapCameraToTarget();
+    startDialogue({
+      lines: [
+        'You step into the open air. The village crossroads lie ahead.\n{d}Find {g}Guru Vidya{/} at the center of Siṃhapura — the one called the "heavy one," heavy with knowing.{/}',
+      ],
+      speaker: 'The Resonant World',
+      speakerColor: '#ffd700',
+      words: [],
+      give: [],
+      take: [],
+      setFlags: [],
+    });
+  });
+  screenFlash = { alpha: 0.4, color: '#ffd700' };
+  cameraShake.intensity = 6;
+}
+
+function unlockSpawnRoom() { unlockMotherChamber(); }
+
+function openQuiz(cfg) {
+  quizState = {
+    q: cfg.q,
+    opts: [...cfg.opts],
+    ok: cfg.ok,
+    wrongHint: cfg.wrongHint || 'Try again…',
+    wrong: false,
+    wrongIdx: -1,
+    hovered: -1,
+    onCorrect: cfg.onCorrect,
+    _bounds: [],
+  };
+}
+
 // ═══════════════════════════════════════
 //           FAMILY SHRINE INTRO
 // ═══════════════════════════════════════
-function showIntroMessage(text, seconds) {
-  introMsg = { text, timer: seconds || 5 };
+function showIntroMessage(text, onDismiss) {
+  introMsg = { text, charIndex: 0, visLen: text.length, onDismiss: onDismiss || null };
+}
+
+function showIntroChain(messages, onDone) {
+  let i = 0;
+  const next = () => {
+    if (i >= messages.length) {
+      if (onDone) onDone();
+      return;
+    }
+    showIntroMessage(messages[i++], next);
+  };
+  next();
 }
 
 function openIntroQuiz(key, onCorrect) {
   const q = INTRO_QUIZ[key];
-  quizState = {
-    key,
+  openQuiz({
     q: q.q,
-    opts: [...q.opts],
+    opts: q.opts,
     ok: q.ok,
-    wrong: false,
-    wrongIdx: -1,
-    hovered: -1,
+    wrongHint: 'Try again…',
     onCorrect,
-    _bounds: [],
-  };
+  });
 }
 
 function introDist(tx, ty, w, h) {
@@ -1656,7 +2691,7 @@ function tryIntroInteract() {
     openIntroQuiz('mother', () => {
       intro.motherDone = true;
       discoverWord('matri');
-      showIntroMessage(INTRO_QUIZ.mother.etym, 5);
+      showIntroMessage(INTRO_QUIZ.mother.etym);
       applyIntroDoorNorth(map, true);
       intro.doorNorthOpen = true;
       screenFlash = { alpha: 0.35, color: '#ffd700' };
@@ -1671,7 +2706,7 @@ function tryIntroInteract() {
     const id = near.target;
     if (!intro.bonuses[id]) {
       intro.bonuses[id] = true;
-      showIntroMessage(INTRO_BONUS_TEXT[id], 6);
+      showIntroMessage(INTRO_BONUS_TEXT[id]);
       screenFlash = { alpha: 0.2, color: '#ffd700' };
     }
     return;
@@ -1690,7 +2725,7 @@ function tryIntroInteract() {
     openIntroQuiz('father', () => {
       intro.fatherDone = true;
       discoverWord('pitri');
-      showIntroMessage(INTRO_QUIZ.father.etym, 5);
+      showIntroMessage(INTRO_QUIZ.father.etym);
       applyIntroExit(map, true);
       intro.exitOpen = true;
       screenFlash = { alpha: 0.4, color: '#ffd700' };
@@ -1734,16 +2769,16 @@ function updateIntroStatues(dt) {
       if (which === 'brother' && !intro.brotherDone) {
         intro.brotherDone = true;
         discoverWord('bhrata');
-        showIntroMessage(INTRO_ETYM.brother, 5);
+        showIntroMessage(INTRO_ETYM.brother);
       }
       if (which === 'sister' && !intro.sisterDone) {
         intro.sisterDone = true;
         discoverWord('svasar');
-        showIntroMessage(INTRO_ETYM.sister, 5);
+        showIntroMessage(INTRO_ETYM.sister);
       }
       if (intro.brotherDone && intro.sisterDone && !intro.fatherVisible) {
         intro.fatherVisible = true;
-        showIntroMessage('A third figure emerges from the stone…', 3);
+        showIntroMessage('A third figure emerges from the stone…');
         screenFlash = { alpha: 0.25, color: '#ffd700' };
       }
     }
@@ -1802,10 +2837,9 @@ function skipIntroToWorld() {
   quizState = null;
   flags.introComplete = true;
   saveIntroComplete();
+  flags.spawnMotherDone = false;
+  flags.spawnTutorialDone = false;
   beginMainWorld();
-  player.x = INTRO_WORLD_EXIT.x;
-  player.y = INTRO_WORLD_EXIT.y;
-  player.dir = Math.PI / 2;
 }
 
 function completeIntro() {
@@ -1977,13 +3011,29 @@ function renderIntroStatues() {
   }
 }
 
+function measureIntroMessageHeight(text, maxW, lh) {
+  ctx.font = `15px ${FONT_FALLBACK}`;
+  let lines = 0;
+  for (const para of text.split('\n')) {
+    if (!para) { lines++; continue; }
+    let line = '';
+    for (const w of para.split(' ')) {
+      const test = line + w + ' ';
+      if (ctx.measureText(test).width > maxW && line) { lines++; line = w + ' '; }
+      else line = test;
+    }
+    if (line.trim()) lines++;
+  }
+  return Math.max(118, lines * lh + 54);
+}
+
 function renderIntroMessage() {
   if (!introMsg) return;
-  const pw = 520, ph = 100;
+  const pw = 520;
+  const lh = 22;
+  const ph = measureIntroMessageHeight(introMsg.text, pw - 36, lh);
   const px = (canvas.width - pw) / 2;
   const py = canvas.height * 0.22;
-  const fade = Math.min(1, introMsg.timer);
-  ctx.globalAlpha = Math.min(1, fade) * Math.min(1, introMsg.timer / 0.5);
   ctx.fillStyle = 'rgba(0,0,0,0.82)';
   roundRect(ctx, px, py, pw, ph, 8);
   ctx.fill();
@@ -1993,8 +3043,17 @@ function renderIntroMessage() {
   ctx.stroke();
   ctx.fillStyle = '#f5e6c8';
   ctx.font = `15px ${FONT_FALLBACK}`;
-  wrapTextCanvas(introMsg.text, px + 18, py + 28, pw - 36, 22);
+  const visible = introMsg.text.substring(0, Math.floor(introMsg.charIndex));
+  wrapTextCanvas(visible, px + 18, py + 28, pw - 36, lh);
+  ctx.fillStyle = '#888';
+  ctx.font = `12px ${FONT_FANTASY}`;
+  ctx.textAlign = 'center';
+  const done = introMsg.charIndex >= introMsg.visLen;
+  const pulse = done ? 0.55 + 0.45 * Math.sin(time * 3) : 0.35;
+  ctx.globalAlpha = pulse;
+  ctx.fillText(done ? 'Press E to continue' : '…', px + pw / 2, py + ph - 16);
   ctx.globalAlpha = 1;
+  ctx.textAlign = 'left';
 }
 
 function wrapTextCanvas(text, x, y, maxW, lh) {
@@ -2053,8 +3112,8 @@ function renderQuizOverlay() {
 
   if (quizState.wrong) {
     ctx.fillStyle = '#e08080';
-    ctx.font = `12px ${FONT_FANTASY}`;
-    ctx.fillText('Try again…', px + 16, oy + 8);
+    ctx.font = `12px ${FONT_FALLBACK}`;
+    wrapTextCanvas(quizState.wrongHint || 'Try again…', px + 16, oy + 8, pw - 32, 16);
   }
 }
 

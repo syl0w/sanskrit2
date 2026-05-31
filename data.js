@@ -12,7 +12,8 @@ const MAP_H = 60;
 const T = {
   VOID:0, GRASS:1, GRASS2:2, PATH:3, WATER:4, TREE:5,
   WALL:6, FLOOR:7, SAND:8, MOUNTAIN:9, BRIDGE:10,
-  FLOWERS:11, TALL_GRASS:12, CROPS:13, DOOR:14, FENCE:15, BUSH:16
+  FLOWERS:11, TALL_GRASS:12, CROPS:13, DOOR:14, FENCE:15, BUSH:16,
+  FLOOR_TRACK_H:17, FLOOR_TRACK_V:18, FLOOR_TRACK_X:19,
 };
 const SOLID = new Set([T.VOID,T.TREE,T.WALL,T.MOUNTAIN,T.FENCE,T.BUSH,T.WATER]);
 
@@ -596,7 +597,207 @@ function generateMap() {
   map[4][41]=T.PATH;
   carvePath(map, 41,4, 41,7, 2);
 
+  // Spawn chamber + family hall (tutorial sequence SW of village crossroad)
+  applySpawnChambers(map, { motherDoorOpen: false, hallDoorOpen: false });
+
   return map;
+}
+
+// === MOTHER CHAMBER (4×3 interior) ===
+const SPAWN_ROOM = {
+  x: 32, y: 32,
+  iw: 4, ih: 3,
+  door: { x: 34, y: 36 },       // south — connects to family hall below
+  mother: { x: 35.5, y: 33.5, name: 'Mother statue', color: '#8a8580', headColor: '#a8a8a8' },
+  player: { x: 34.5, y: 34.8 },
+};
+
+// === FAMILY HALL (8×4 interior, below mother chamber) ===
+const FAMILY_HALL = {
+  x: 29, y: 36,
+  iw: 8, ih: 4,
+  northDoor: { x: 34, y: 36 },  // shared with SPAWN_ROOM.door
+  southDoor: { x: 34, y: 41 },
+  brotherMark: { x: 30, y: 37 },
+  sisterMark: { x: 30, y: 39 },
+  brother: {
+    homeX: 36.5, homeY: 39.5, targetX: 30.5, targetY: 37.5,
+    path: [{ x: 36.5, y: 39.5 }, { x: 36.5, y: 37.5 }, { x: 30.5, y: 37.5 }],
+  },
+  sister: {
+    homeX: 37.5, homeY: 38.5, targetX: 30.5, targetY: 39.5,
+    path: [{ x: 37.5, y: 38.5 }, { x: 37.5, y: 39.5 }, { x: 30.5, y: 39.5 }],
+  },
+  brotherTrackTiles: [[36, 38], [36, 39], [30, 37], [31, 37], [32, 37], [33, 37], [34, 37], [35, 37], [36, 37]],
+  sisterTrackTiles: [[37, 38], [37, 39], [30, 39], [31, 39], [32, 39], [33, 39], [34, 39], [35, 39], [36, 39], [37, 39]],
+  father: { x: 33.5, y: 40.5, name: 'Father statue' },
+  paintings: [
+    { id: 'matrix', wall: 'east', wx: 38, wy: 37, ix: 37.25, iy: 37.5, name: 'Matrix painting' },
+    { id: 'mammal', wall: 'south', wx: 36, wy: 41, ix: 36.5, iy: 40.35, name: 'Mammal painting' },
+    { id: 'maternity', wall: 'north', wx: 31, wy: 36, ix: 31.5, iy: 37.35, name: 'Maternity painting' },
+  ],
+};
+
+function spawnRoomOuterSize() {
+  return { w: SPAWN_ROOM.iw + 2, h: SPAWN_ROOM.ih + 2 };
+}
+
+function familyHallOuterSize() {
+  return { w: FAMILY_HALL.iw + 2, h: FAMILY_HALL.ih + 2 };
+}
+
+function familyHallInteriorBounds() {
+  const H = FAMILY_HALL;
+  return { x: H.x + 1, y: H.y + 1, w: H.iw, h: H.ih };
+}
+
+function spawnTutorialBounds() {
+  const m = spawnRoomInteriorBounds();
+  const H = FAMILY_HALL;
+  const ho = familyHallOuterSize();
+  const x = Math.min(m.x, H.x + 1);
+  const y = m.y;
+  const r = Math.max(m.x + m.w, H.x + ho.w - 1);
+  const b = H.y + ho.h - 1;
+  return { x, y, w: r - x, h: b - y };
+}
+
+function applySpawnChambers(map, state) {
+  applyMotherRoom(map, !!state.motherDoorOpen);
+  applyFamilyHall(map, state);
+}
+
+function applyMotherRoom(map, doorOpen) {
+  const R = SPAWN_ROOM;
+  const { w: tw, h: th } = spawnRoomOuterSize();
+  const ox = R.x, oy = R.y;
+
+  for (let dy = 0; dy < th; dy++) {
+    for (let dx = 0; dx < tw; dx++) {
+      const x = ox + dx, y = oy + dy;
+      const onWall = dx === 0 || dx === tw - 1 || dy === 0 || dy === th - 1;
+      if (!onWall) {
+        map[y][x] = T.FLOOR;
+        continue;
+      }
+      if (x === R.door.x && y === R.door.y) {
+        map[y][x] = doorOpen ? T.DOOR : T.WALL;
+        continue;
+      }
+      map[y][x] = T.WALL;
+    }
+  }
+}
+
+function applyFamilyHall(map, state) {
+  const H = FAMILY_HALL;
+  const { w: tw, h: th } = familyHallOuterSize();
+  const ox = H.x, oy = H.y;
+
+  for (let dy = 0; dy < th; dy++) {
+    for (let dx = 0; dx < tw; dx++) {
+      const x = ox + dx, y = oy + dy;
+      const onWall = dx === 0 || dx === tw - 1 || dy === 0 || dy === th - 1;
+      if (!onWall) {
+        map[y][x] = T.FLOOR;
+        continue;
+      }
+      if (x === H.northDoor.x && y === H.northDoor.y) {
+        map[y][x] = state.motherDoorOpen ? T.DOOR : T.WALL;
+        continue;
+      }
+      if (x === H.southDoor.x && y === H.southDoor.y) {
+        map[y][x] = state.hallDoorOpen ? T.DOOR : T.WALL;
+        continue;
+      }
+      map[y][x] = T.WALL;
+    }
+  }
+  if (state.hallDoorOpen) {
+    clearAllHallTrackTiles(map);
+  } else {
+    paintFamilyHallTracks(map);
+  }
+  if (state.hallDoorOpen) {
+    map[H.southDoor.y + 1][H.southDoor.x] = T.PATH;
+    map[H.southDoor.y + 2][H.southDoor.x] = T.PATH;
+  }
+}
+
+function paintFamilyHallTracks(map) {
+  repaintFamilyHallTracks(map, true, true);
+}
+
+function coordToTile(c) {
+  return Math.trunc(c);
+}
+
+function tilesOnOrthogonalSegment(x1, y1, x2, y2) {
+  const tiles = [];
+  let cx = coordToTile(x1);
+  let cy = coordToTile(y1);
+  const tx = coordToTile(x2);
+  const ty = coordToTile(y2);
+  tiles.push({ tx: cx, ty: cy });
+  while (cx !== tx || cy !== ty) {
+    if (cx !== tx) cx += tx > cx ? 1 : -1;
+    else cy += ty > cy ? 1 : -1;
+    tiles.push({ tx: cx, ty: cy });
+  }
+  return tiles;
+}
+
+function paintPathTracks(map, path) {
+  const orient = new Map();
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const isH = Math.abs(b.y - a.y) < 0.01;
+    const isV = Math.abs(b.x - a.x) < 0.01;
+    for (const { tx, ty } of tilesOnOrthogonalSegment(a.x, a.y, b.x, b.y)) {
+      const k = `${tx},${ty}`;
+      const o = orient.get(k) || { h: false, v: false };
+      if (isH) o.h = true;
+      if (isV) o.v = true;
+      orient.set(k, o);
+    }
+  }
+  const b = familyHallInteriorBounds();
+  for (const [k, o] of orient) {
+    const [tx, ty] = k.split(',').map(Number);
+    if (tx < b.x || tx >= b.x + b.w || ty < b.y || ty >= b.y + b.h) continue;
+    if (o.h && o.v) map[ty][tx] = T.FLOOR_TRACK_X;
+    else if (o.h) map[ty][tx] = T.FLOOR_TRACK_H;
+    else if (o.v) map[ty][tx] = T.FLOOR_TRACK_V;
+  }
+}
+
+function clearAllHallTrackTiles(map) {
+  const b = familyHallInteriorBounds();
+  for (let y = b.y; y < b.y + b.h; y++) {
+    for (let x = b.x; x < b.x + b.w; x++) {
+      const t = map[y][x];
+      if (t === T.FLOOR_TRACK_H || t === T.FLOOR_TRACK_V || t === T.FLOOR_TRACK_X) {
+        map[y][x] = T.FLOOR;
+      }
+    }
+  }
+}
+
+function repaintFamilyHallTracks(map, showBrother, showSister) {
+  clearAllHallTrackTiles(map);
+  if (showBrother) paintPathTracks(map, FAMILY_HALL.brother.path);
+  if (showSister) paintPathTracks(map, FAMILY_HALL.sister.path);
+}
+
+function clearFamilyHallTrackFor(map, which) {
+  // Legacy alias — prefer repaintFamilyHallTracks from game logic.
+  repaintFamilyHallTracks(map, which !== 'brother', which !== 'sister');
+}
+
+// Legacy alias
+function applySpawnRoom(map, southDoorOpen) {
+  applySpawnChambers(map, { motherDoorOpen: southDoorOpen, hallDoorOpen: false });
 }
 
 // --- Map helpers ---
@@ -654,6 +855,52 @@ const INTRO_BONUS_TEXT = {
   quilt: "Gives us 'maternity', 'matriarchy', and surprisingly...",
   matrix: "Matrix comes from the same root as 'mother'. It originally meant 'womb'—the place where new life is formed. The mathematical meaning came later.",
   mammal: "Mammal comes from the same root as 'mother'. It literally means 'an animal that nurses its young with milk'.",
+};
+
+// Etymology Book — lore entries unlocked by paintings, statues, and exploration
+const ETYMOLOGY_LORE = {
+  matrix: {
+    title: 'Matrix',
+    root: 'mātṛ-',
+    text:
+      "Matrix comes from the same Sanskrit root as mātṛ, 'mother.' In Latin, matrix meant 'womb' — the place where new life is formed. The mathematical matrix came centuries later, but the word still carries that sense of a generative container.",
+  },
+  maternity: {
+    title: 'Maternity',
+    root: 'mātṛ-',
+    text:
+      "Maternity, matriarch, and even material all branch from mātṛ, 'mother.' The root encodes not just a person but a principle — nurture, origin, and the substance from which things are made.",
+  },
+  mammal: {
+    title: 'Mammal',
+    root: 'mātṛ-',
+    text:
+      "Mammal comes from mamma, the Latin for 'breast,' which descends from the same ancient root as mātṛ. It names animals that nurse their young with milk — motherhood written into biology.",
+  },
+  matri: {
+    title: 'Mother (mātṛ)',
+    root: 'mātṛ-',
+    text:
+      "English 'mother' and Sanskrit mātṛ share the exact same 5,000-year-old root. Say them aloud — the echo is not coincidence.",
+  },
+  pitri: {
+    title: 'Father (pitṛ)',
+    root: 'pitṛ-',
+    text:
+      "Sanskrit pitṛ is nearly identical to English 'father' and Latin pater. The word for the father has stayed stable across Indo-European languages from Iceland to India.",
+  },
+  bhrata: {
+    title: 'Brother (bhrātṛ)',
+    root: 'bhrā-',
+    text:
+      "From bhrā- 'to carry' — as brothers carry each other's burdens. Sanskrit bhrātṛ, Latin frater, English 'brother': the deepest bond, encoded in the oldest words.",
+  },
+  svasar: {
+    title: 'Sister (svasṛ)',
+    root: 'svasṛ-',
+    text:
+      "The word 'sister' has changed less in 5,000 years than most words change in 100. svasṛ → sister, across nearly every Indo-European language.",
+  },
 };
 
 function generateIntroMap() {

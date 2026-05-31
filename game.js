@@ -32,6 +32,11 @@ let dialogueSlide = 0;    // 0→1 slide-up
 let minimap = null;        // offscreen canvas
 let glitchState = { timer: 8, active: false, duration: 0 }; // world-glitch effect
 let touch = { active: false, worldX: 0, worldY: 0, tapX: 0, tapY: 0, dx: 0, dy: 0 };
+let isMobileUI = false;
+let mobilePulse = {};
+const mobileJoystick = { active: false, dx: 0, dy: 0, pointerId: null };
+const JOYSTICK_RADIUS = 50;
+const JOYSTICK_DEADZONE = 8;
 let mainMap = null;
 let mapW = MAP_W, mapH = MAP_H;
 let introActive = false;
@@ -96,8 +101,8 @@ const SPAWN_TUTORIAL = {
     "The world outside is vast. But first — this chamber.",
   controls:
     "You remember how to move.\n\n" +
-    "WASD or touch — walk the room.\n" +
-    "E or tap — speak, examine, or act on any statue or inscription.\n\n" +
+    "Joystick, WASD, or touch — walk the room.\n" +
+    "E button or tap — speak, examine, or act on any statue or inscription.\n\n" +
     "When you're ready, find the sealed door to the south.",
   doorFail:
     "The stone door will not budge. Runes older than the city trace its frame.\n\n" +
@@ -359,6 +364,8 @@ function init() {
   });
   window.addEventListener('keyup', e => { keys[e.code]=false; });
   setupTouchControls();
+  setupMobileControls();
+  updateMobileLayout();
   const urlParams = new URLSearchParams(location.search);
   mainMap = generateMap();
   groundItemState = GROUND_ITEMS.map(()=>false);
@@ -380,6 +387,114 @@ function init() {
   gameLoop(performance.now());
 }
 
+function isMobileControlTarget(target) {
+  return target && !!target.closest('#mobile-controls');
+}
+
+function updateMobileLayout() {
+  isMobileUI = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+  document.body.classList.toggle('mobile-ui', isMobileUI);
+}
+
+function pulseMobileKey(code) {
+  mobilePulse[code] = true;
+}
+
+function startGameFromTitle() {
+  gameStarted = true;
+  titleFade = 0;
+  particles = [];
+  snapCameraToTarget();
+}
+
+function getControlsHint() {
+  if (isMobileUI) {
+    return 'Joystick: Move  ·  E: Interact  ·  I / L / B: Panels';
+  }
+  return 'WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  L: Lexicon  ·  B: Etymology Book';
+}
+
+function setupMobileControls() {
+  const joyBase = document.getElementById('mobile-joystick-base');
+  const joyStick = document.getElementById('mobile-joystick-stick');
+  const btnE = document.getElementById('btn-mobile-interact');
+  const btnI = document.getElementById('btn-mobile-inv');
+  const btnL = document.getElementById('btn-mobile-lex');
+  const btnB = document.getElementById('btn-mobile-book');
+  if (!joyBase || !joyStick) return;
+
+  const resetJoystick = () => {
+    mobileJoystick.active = false;
+    mobileJoystick.dx = 0;
+    mobileJoystick.dy = 0;
+    mobileJoystick.pointerId = null;
+    joyStick.style.transform = 'translate(-50%, -50%)';
+    joyBase.classList.remove('active');
+  };
+
+  const updateJoystick = (e) => {
+    const rect = joyBase.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    let ox = e.clientX - cx;
+    let oy = e.clientY - cy;
+    const dist = Math.hypot(ox, oy);
+    if (dist > JOYSTICK_RADIUS) {
+      ox = (ox / dist) * JOYSTICK_RADIUS;
+      oy = (oy / dist) * JOYSTICK_RADIUS;
+    }
+    joyStick.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
+    if (dist < JOYSTICK_DEADZONE) {
+      mobileJoystick.dx = 0;
+      mobileJoystick.dy = 0;
+      return;
+    }
+    const norm = Math.min(dist, JOYSTICK_RADIUS) / JOYSTICK_RADIUS;
+    const angle = Math.atan2(oy, ox);
+    mobileJoystick.dx = Math.cos(angle) * norm;
+    mobileJoystick.dy = Math.sin(angle) * norm;
+  };
+
+  joyBase.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    mobileJoystick.active = true;
+    mobileJoystick.pointerId = e.pointerId;
+    joyBase.setPointerCapture(e.pointerId);
+    joyBase.classList.add('active');
+    updateJoystick(e);
+  });
+
+  joyBase.addEventListener('pointermove', (e) => {
+    if (!mobileJoystick.active || e.pointerId !== mobileJoystick.pointerId) return;
+    updateJoystick(e);
+  });
+
+  const endJoystick = (e) => {
+    if (mobileJoystick.pointerId !== null && e.pointerId !== mobileJoystick.pointerId) return;
+    try { joyBase.releasePointerCapture(e.pointerId); } catch (_) {}
+    resetJoystick();
+  };
+  joyBase.addEventListener('pointerup', endJoystick);
+  joyBase.addEventListener('pointercancel', endJoystick);
+
+  const bindPulse = (el, code) => {
+    if (!el) return;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      pulseMobileKey(code);
+    });
+  };
+
+  btnE?.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (!gameStarted) startGameFromTitle();
+    else pulseMobileKey('KeyE');
+  });
+  bindPulse(btnI, 'KeyI');
+  bindPulse(btnL, 'KeyL');
+  bindPulse(btnB, 'KeyB');
+}
+
 function setupTouchControls() {
   const toWorld = (clientX, clientY) => {
     const rect = canvas.getBoundingClientRect();
@@ -389,6 +504,7 @@ function setupTouchControls() {
   };
 
   canvas.addEventListener('touchstart', e => {
+    if (isMobileControlTarget(e.target)) return;
     e.preventDefault();
     const t = e.changedTouches[0];
     touch.tapX = t.clientX;
@@ -400,6 +516,7 @@ function setupTouchControls() {
   }, { passive: false });
 
   canvas.addEventListener('touchmove', e => {
+    if (isMobileControlTarget(e.target)) return;
     e.preventDefault();
     const t = e.changedTouches[0];
     const w = toWorld(t.clientX, t.clientY);
@@ -408,12 +525,20 @@ function setupTouchControls() {
   }, { passive: false });
 
   canvas.addEventListener('touchend', e => {
+    if (isMobileControlTarget(e.target)) return;
     e.preventDefault();
     const t = e.changedTouches[0];
     const moved = Math.hypot(t.clientX - touch.tapX, t.clientY - touch.tapY);
     touch.active = false;
-    if (moved < 18 && gameStarted && !dialogueState && !showInventory && !showLexicon && !showEtymologyBook && !quizState) {
+    if (moved >= 18) return;
+
+    if (!gameStarted) {
+      startGameFromTitle();
+      return;
+    }
+    if (!dialogueState && !showInventory && !showLexicon && !showEtymologyBook && !quizState) {
       if (introMsg) dismissIntroMessage();
+      else if (introActive) tryIntroInteract();
       else tryInteract();
     }
   }, { passive: false });
@@ -422,6 +547,7 @@ function setupTouchControls() {
 function applyTouchMovement() {
   touch.dx = 0;
   touch.dy = 0;
+  if (isMobileUI) return;
   if (!touch.active || !gameStarted || dialogueState || showInventory || showLexicon || showEtymologyBook || quizState || introMsg) return;
   const px = player.x * TILE_SIZE + TILE_SIZE / 2;
   const py = player.y * TILE_SIZE + TILE_SIZE / 2;
@@ -433,14 +559,57 @@ function applyTouchMovement() {
   touch.dy = dy / len;
 }
 
+function getMovementDelta() {
+  applyTouchMovement();
+  let dx = 0;
+  let dy = 0;
+  if (isMobileUI && mobileJoystick.active && (mobileJoystick.dx || mobileJoystick.dy)) {
+    return { dx: mobileJoystick.dx, dy: mobileJoystick.dy };
+  }
+  if (touch.active && (touch.dx || touch.dy)) {
+    return { dx: touch.dx, dy: touch.dy };
+  }
+  if (isDown('KeyW') || isDown('ArrowUp')) dy -= 1;
+  if (isDown('KeyS') || isDown('ArrowDown')) dy += 1;
+  if (isDown('KeyA') || isDown('ArrowLeft')) dx -= 1;
+  if (isDown('KeyD') || isDown('ArrowRight')) dx += 1;
+  if (dx === 0 && dy === 0) return { dx: 0, dy: 0 };
+  const len = Math.hypot(dx, dy) || 1;
+  return { dx: dx / len, dy: dy / len };
+}
+
+function movePlayer(dx, dy, dt) {
+  if (dx !== 0 || dy !== 0) {
+    if (!isStatueSliding()) {
+      const spd = player.speed * dt;
+      const nx = player.x + dx * spd;
+      const ny = player.y + dy * spd;
+      if (canMoveTo(nx, player.y)) player.x = nx;
+      if (canMoveTo(player.x, ny)) player.y = ny;
+      player.dir = Math.atan2(dy, dx);
+      player.moving = true;
+      player.bobPhase += dt * 10;
+      player.stepTimer += dt;
+      if (player.stepTimer > 0.2) {
+        player.stepTimer = 0;
+        spawnParticle(player.x * TILE_SIZE, player.y * TILE_SIZE + 6, 'dust_step');
+      }
+    }
+  } else {
+    player.moving = false;
+    player.bobPhase += dt * 2;
+  }
+}
+
 function resize() {
   canvas.width = 960;
   canvas.height = 640;
+  updateMobileLayout();
 }
 
 // ─── INPUT ───
 function isDown(c) { return !!keys[c]; }
-function justPressed(c) { return keys[c]&&!prevKeys[c]; }
+function justPressed(c) { return (keys[c] && !prevKeys[c]) || !!mobilePulse[c]; }
 function hasItem(id) { return inventory.includes(id); }
 function stateObj() { return { flags, inventory, has:id=>inventory.includes(id) }; }
 
@@ -452,6 +621,7 @@ function gameLoop(ts) {
   update(dt);
   render();
   prevKeys = {...keys};
+  mobilePulse = {};
   requestAnimationFrame(gameLoop);
 }
 
@@ -462,11 +632,8 @@ function update(dt) {
   // Title
   if(!gameStarted) {
     updateParticles(dt);
-    if(justPressed('Enter')||justPressed('Space')||justPressed('KeyE')) {
-      gameStarted = true;
-      titleFade = 0;
-      particles = [];
-      snapCameraToTarget();
+    if (justPressed('Enter') || justPressed('Space') || justPressed('KeyE')) {
+      startGameFromTitle();
     }
     if (justPressed('Escape') && introActive) skipIntroToWorld();
     return;
@@ -549,38 +716,8 @@ function update(dt) {
   }
 
   // Movement
-  applyTouchMovement();
-  let dx=0,dy=0;
-  if(touch.active && (touch.dx || touch.dy)) {
-    dx = touch.dx;
-    dy = touch.dy;
-  } else {
-    if(isDown('KeyW')||isDown('ArrowUp'))    dy=-1;
-    if(isDown('KeyS')||isDown('ArrowDown'))  dy=1;
-    if(isDown('KeyA')||isDown('ArrowLeft'))  dx=-1;
-    if(isDown('KeyD')||isDown('ArrowRight')) dx=1;
-  }
-  if(dx!==0||dy!==0) {
-    if (!isStatueSliding()) {
-    const len=Math.sqrt(dx*dx+dy*dy); dx/=len; dy/=len;
-    const spd=player.speed*dt;
-    const nx=player.x+dx*spd, ny=player.y+dy*spd;
-    if(canMoveTo(nx,player.y)) player.x=nx;
-    if(canMoveTo(player.x,ny)) player.y=ny;
-    player.dir=Math.atan2(dy,dx);
-    player.moving=true;
-    player.bobPhase+=dt*10;
-    player.stepTimer+=dt;
-    // Footstep dust
-    if(player.stepTimer>0.2) {
-      player.stepTimer=0;
-      spawnParticle(player.x*TILE_SIZE,player.y*TILE_SIZE+6,'dust_step');
-    }
-    }
-  } else {
-    player.moving=false;
-    player.bobPhase+=dt*2;
-  }
+  const { dx, dy } = getMovementDelta();
+  movePlayer(dx, dy, dt);
 
   if (!flags.spawnTutorialDone) {
     updateSpawnFamilyStatues(dt);
@@ -1015,14 +1152,14 @@ function renderTitle() {
   // Controls
   ctx.font=`13px ${FONT_FANTASY}`;
   ctx.fillStyle='#555';
-  ctx.fillText('WASD or touch to move  ·  E or tap to interact  ·  I inventory  ·  L lexicon  ·  B etymology book',cx,cy-12);
+  ctx.fillText(getControlsHint(), cx, cy - 12);
   ctx.fillText('?play skips title',cx,cy+4);
   // Pulsing prompt
   const a=0.5+0.5*Math.sin(time*3);
   ctx.globalAlpha=a;
   ctx.fillStyle='#ffd700';
   ctx.font=`${FONT_FANTASY_BOLD} 20px ${FONT_FANTASY}`;
-  ctx.fillText('Press E or ENTER to begin',cx,cy+24);
+  ctx.fillText(isMobileUI ? 'Tap screen or press E to begin' : 'Press E or ENTER to begin', cx, cy + 24);
   ctx.globalAlpha=1;
   ctx.font=`11px ${FONT_FANTASY}`;
   ctx.fillStyle='#444';
@@ -1783,7 +1920,7 @@ function renderHUD() {
   bg.addColorStop(0,'transparent');bg.addColorStop(1,'rgba(0,0,0,0.5)');
   ctx.fillStyle=bg;ctx.fillRect(0,canvas.height-24,canvas.width,24);
   ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText('WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  L: Lexicon  ·  B: Etymology Book',12,canvas.height-7);
+  ctx.fillText(getControlsHint(), 12, canvas.height - 7);
 
   // Quest panel
   if(flags.metGuru&&!flags.gameComplete) {
@@ -2788,33 +2925,8 @@ function updateIntroStatues(dt) {
 function updateIntro(dt) {
   updateIntroStatues(dt);
 
-  applyTouchMovement();
-  let dx = 0, dy = 0;
-  if (touch.active && (touch.dx || touch.dy)) {
-    dx = touch.dx;
-    dy = touch.dy;
-  } else {
-    if (isDown('KeyW') || isDown('ArrowUp')) dy = -1;
-    if (isDown('KeyS') || isDown('ArrowDown')) dy = 1;
-    if (isDown('KeyA') || isDown('ArrowLeft')) dx = -1;
-    if (isDown('KeyD') || isDown('ArrowRight')) dx = 1;
-  }
-  if (dx !== 0 || dy !== 0) {
-    const len = Math.sqrt(dx * dx + dy * dy) || 1;
-    dx /= len;
-    dy /= len;
-    const spd = player.speed * dt;
-    const nx = player.x + dx * spd;
-    const ny = player.y + dy * spd;
-    if (canMoveTo(nx, player.y)) player.x = nx;
-    if (canMoveTo(player.x, ny)) player.y = ny;
-    player.dir = Math.atan2(dy, dx);
-    player.moving = true;
-    player.bobPhase += dt * 10;
-  } else {
-    player.moving = false;
-    player.bobPhase += dt * 2;
-  }
+  const { dx, dy } = getMovementDelta();
+  movePlayer(dx, dy, dt);
 
   if (justPressed('KeyE')) tryIntroInteract();
 

@@ -277,6 +277,188 @@
            display: block;
        }
 
+       /* Mobile controls */
+       #mobile-controls {
+           display: none;
+           position: absolute;
+           bottom: 0;
+           left: 0;
+           width: 100%;
+           height: 100%;
+           pointer-events: none;
+           z-index: 40;
+       }
+
+       body.mobile-layout #mobile-controls {
+           display: block;
+       }
+
+       #mobile-look-pad {
+           position: absolute;
+           left: max(12px, env(safe-area-inset-left));
+           bottom: max(100px, calc(80px + env(safe-area-inset-bottom)));
+           width: 120px;
+           height: 120px;
+           border-radius: 50%;
+           background: rgba(255, 255, 255, 0.12);
+           border: 2px solid rgba(255, 255, 255, 0.35);
+           pointer-events: auto;
+           touch-action: none;
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           justify-content: center;
+           color: rgba(255, 255, 255, 0.9);
+           font-size: 11px;
+           font-weight: 600;
+           text-align: center;
+           line-height: 1.3;
+           user-select: none;
+           -webkit-user-select: none;
+       }
+
+       #mobile-look-pad.active {
+           background: rgba(255, 255, 255, 0.22);
+           border-color: rgba(255, 255, 255, 0.55);
+       }
+
+       #mobile-look-pad svg {
+           width: 28px;
+           height: 28px;
+           margin-bottom: 4px;
+           opacity: 0.9;
+       }
+
+       #mobile-rotate-btns {
+           position: absolute;
+           left: max(140px, calc(128px + env(safe-area-inset-left)));
+           bottom: max(118px, calc(98px + env(safe-area-inset-bottom)));
+           display: flex;
+           gap: 8px;
+           pointer-events: auto;
+       }
+
+       .cam-rotate-btn {
+           width: 48px;
+           height: 48px;
+           border-radius: 50%;
+           border: 2px solid rgba(255, 255, 255, 0.35);
+           background: rgba(255, 255, 255, 0.12);
+           color: #fff;
+           font-size: 22px;
+           line-height: 1;
+           padding: 0;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           touch-action: none;
+           user-select: none;
+           -webkit-user-select: none;
+           box-shadow: none;
+       }
+
+       .cam-rotate-btn:active {
+           background: rgba(255, 255, 255, 0.28);
+           transform: none;
+       }
+
+       #mobile-hint {
+           display: none;
+           position: absolute;
+           top: max(12px, env(safe-area-inset-top));
+           left: 50%;
+           transform: translateX(-50%);
+           background: rgba(0, 0, 0, 0.75);
+           color: #fff;
+           padding: 10px 16px;
+           border-radius: 20px;
+           font-size: 13px;
+           font-weight: 500;
+           pointer-events: none;
+           z-index: 45;
+           white-space: nowrap;
+           opacity: 1;
+           transition: opacity 0.6s;
+       }
+
+       body.mobile-layout #mobile-hint {
+           display: block;
+       }
+
+       #mobile-hint.fade-out {
+           opacity: 0;
+       }
+
+       @media (max-width: 768px), (pointer: coarse) {
+           #ui-layer {
+               padding: 10px;
+               padding-top: max(10px, env(safe-area-inset-top));
+               padding-bottom: max(10px, env(safe-area-inset-bottom));
+           }
+
+           #recipe-board {
+               min-width: unset;
+               max-width: 55vw;
+               padding: 12px;
+           }
+
+           #recipe-board h2 {
+               font-size: 16px;
+               margin-bottom: 6px;
+               padding-bottom: 4px;
+           }
+
+           #order-name {
+               font-size: 14px;
+               margin-bottom: 8px;
+           }
+
+           #order-reqs {
+               font-size: 13px;
+           }
+
+           #order-reqs li {
+               margin-bottom: 4px;
+           }
+
+           #pot-status {
+               bottom: max(88px, calc(72px + env(safe-area-inset-bottom)));
+               font-size: 14px;
+               padding: 8px 14px;
+               max-width: 90vw;
+               text-align: center;
+           }
+
+           #controls {
+               width: 100%;
+               gap: 12px;
+               margin-bottom: max(8px, env(safe-area-inset-bottom));
+               justify-content: center;
+           }
+
+           #controls button {
+               flex: 1;
+               max-width: 160px;
+               padding: 14px 16px;
+               font-size: 15px;
+               min-height: 48px;
+           }
+
+           #feedback {
+               font-size: 22px;
+               padding: 10px 20px;
+           }
+
+           #hover-label {
+               display: none;
+           }
+
+           #dialogue-inner {
+               margin-bottom: max(12px, env(safe-area-inset-bottom));
+               padding: 16px 20px;
+           }
+       }
+
 
    </style>
 </head>
@@ -306,6 +488,21 @@
 
 
    <div id="feedback">Perfect!</div>
+
+   <div id="mobile-hint">Drag left pad to look · Tap ingredients to add</div>
+
+   <div id="mobile-controls" aria-hidden="true">
+       <div id="mobile-look-pad" aria-label="Drag to look around">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+               <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+           </svg>
+           Look
+       </div>
+       <div id="mobile-rotate-btns">
+           <button type="button" class="cam-rotate-btn" id="cam-rotate-left" aria-label="Turn left">‹</button>
+           <button type="button" class="cam-rotate-btn" id="cam-rotate-right" aria-label="Turn right">›</button>
+       </div>
+   </div>
   
    <div id="hover-label"></div>
 
@@ -314,7 +511,7 @@
        <div id="dialogue-inner">
            <div id="dialogue-speaker">Ms Solomon</div>
            <div id="dialogue-text"></div>
-           <div id="dialogue-continue">▼ Click to continue</div>
+           <div id="dialogue-continue">▼ Tap to continue</div>
        </div>
    </div>
 
@@ -384,9 +581,9 @@
        function updateDialogueContinue() {
            const cont = document.getElementById('dialogue-continue');
            if (dialogueIndex >= dialogueLines.length - 1) {
-               cont.textContent = '▼ Click to dismiss';
+               cont.textContent = isMobileLayout ? '▼ Tap to dismiss' : '▼ Click to dismiss';
            } else {
-               cont.textContent = '▼ Click to continue';
+               cont.textContent = isMobileLayout ? '▼ Tap to continue' : '▼ Click to continue';
            }
        }
 
@@ -453,6 +650,13 @@
        let previousMousePosition = { x: 0, y: 0 };
        let cameraYaw = 0;
        let cameraPitch = -0.20; // Adjusted starting pitch to look down slightly more at the counter
+       let isMobileLayout = false;
+       let pointerInteractionMode = null; // 'look' | 'interact' | 'desktop'
+       let pointerDownPosition = { x: 0, y: 0 };
+       let camRotateInterval = null;
+       const TAP_THRESHOLD_PX = 12;
+       const MOBILE_LOOK_SENSITIVITY = 0.008;
+       const DESKTOP_LOOK_SENSITIVITY = 0.005;
 
 
        window.onload = function() {
@@ -510,57 +714,149 @@
 
            raycaster = new THREE.Raycaster();
            mouse = new THREE.Vector2();
-          
-           // Mouse/Touch Interaction setup
-           let pointerDownPosition = { x: 0, y: 0 };
-          
-           window.addEventListener('pointerdown', (e) => {
-               if(e.target.tagName === 'BUTTON') return;
-               pointerDownPosition = { x: e.clientX, y: e.clientY };
-               isDraggingCamera = true;
-               previousMousePosition = { x: e.clientX, y: e.clientY };
+
+           setupPointerControls();
+           setupMobileControls();
+           updateMobileLayout();
+           window.addEventListener('resize', () => {
+               onWindowResize();
+               updateMobileLayout();
            });
+       }
+
+
+       function isGameUIElement(target) {
+           if (target.closest('#mobile-look-pad')) return false;
+           return target.closest('#ui-layer, #dialogue-box, #dialogue-overlay, button, .cam-rotate-btn');
+       }
+
+
+       function isPointerOnLookPad(e) {
+           const pad = document.getElementById('mobile-look-pad');
+           if (!pad) return false;
+           const rect = pad.getBoundingClientRect();
+           return e.clientX >= rect.left && e.clientX <= rect.right &&
+                  e.clientY >= rect.top && e.clientY <= rect.bottom;
+       }
+
+
+       function updateMobileLayout() {
+           const wasMobile = isMobileLayout;
+           isMobileLayout = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+           document.body.classList.toggle('mobile-layout', isMobileLayout);
+
+           const hint = document.getElementById('mobile-hint');
+           if (hint && isMobileLayout && !wasMobile) {
+               hint.classList.remove('fade-out');
+               clearTimeout(hint._fadeTimer);
+               hint._fadeTimer = setTimeout(() => hint.classList.add('fade-out'), 5000);
+           }
+       }
+
+
+       function applyCameraDrag(deltaX, deltaY, sensitivity) {
+           cameraYaw -= deltaX * sensitivity;
+           cameraPitch -= deltaY * sensitivity;
+           cameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraPitch));
+           updateCameraRotation();
+       }
+
+
+       function setupPointerControls() {
+           window.addEventListener('pointerdown', (e) => {
+               if (isGameUIElement(e.target)) return;
+               if (dialogueActive) return;
+
+               pointerDownPosition = { x: e.clientX, y: e.clientY };
+               previousMousePosition = { x: e.clientX, y: e.clientY };
+
+               if (isMobileLayout) {
+                   if (isPointerOnLookPad(e)) {
+                       pointerInteractionMode = 'look';
+                       isDraggingCamera = true;
+                       document.getElementById('mobile-look-pad')?.classList.add('active');
+                   } else {
+                       pointerInteractionMode = 'interact';
+                       isDraggingCamera = false;
+                   }
+               } else {
+                   pointerInteractionMode = 'desktop';
+                   isDraggingCamera = true;
+               }
+           }, { passive: true });
 
 
            window.addEventListener('pointermove', (e) => {
-               updateHover(e);
-
-
+               if (!dialogueActive) updateHover(e);
                if (!isDraggingCamera) return;
-
 
                const deltaX = e.clientX - previousMousePosition.x;
                const deltaY = e.clientY - previousMousePosition.y;
-
-
-               cameraYaw -= deltaX * 0.005;
-               cameraPitch -= deltaY * 0.005;
-
-
-               // Clamp pitch so we don't flip upside down
-               cameraPitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraPitch));
-
-
-               updateCameraRotation();
-
-
+               const sensitivity = isMobileLayout ? MOBILE_LOOK_SENSITIVITY : DESKTOP_LOOK_SENSITIVITY;
+               applyCameraDrag(deltaX, deltaY, sensitivity);
                previousMousePosition = { x: e.clientX, y: e.clientY };
-           });
+           }, { passive: true });
 
 
            window.addEventListener('pointerup', (e) => {
-               if(e.target.tagName === 'BUTTON') return;
+               if (isGameUIElement(e.target)) return;
+
+               document.getElementById('mobile-look-pad')?.classList.remove('active');
                isDraggingCamera = false;
-              
-               // If the pointer moved significantly, it was a drag (camera rotation), not a click
+
                const dist = Math.hypot(e.clientX - pointerDownPosition.x, e.clientY - pointerDownPosition.y);
-               if (dist < 5) {
+               const shouldTap =
+                   pointerInteractionMode === 'interact' ||
+                   (pointerInteractionMode === 'desktop' && dist < TAP_THRESHOLD_PX);
+
+               if (shouldTap && dist < TAP_THRESHOLD_PX && !dialogueActive) {
                    onInteract(e);
                }
+
+               pointerInteractionMode = null;
+           }, { passive: true });
+
+
+           window.addEventListener('pointercancel', () => {
+               document.getElementById('mobile-look-pad')?.classList.remove('active');
+               isDraggingCamera = false;
+               pointerInteractionMode = null;
+           }, { passive: true });
+       }
+
+
+       function setupMobileControls() {
+           const leftBtn = document.getElementById('cam-rotate-left');
+           const rightBtn = document.getElementById('cam-rotate-right');
+           const lookPad = document.getElementById('mobile-look-pad');
+
+           const startRotate = (direction) => {
+               stopRotate();
+               camRotateInterval = setInterval(() => {
+                   cameraYaw -= direction * 0.04;
+                   updateCameraRotation();
+               }, 16);
+           };
+           const stopRotate = () => {
+               if (camRotateInterval) {
+                   clearInterval(camRotateInterval);
+                   camRotateInterval = null;
+               }
+           };
+
+           [leftBtn, rightBtn].forEach((btn, i) => {
+               if (!btn) return;
+               const direction = i === 0 ? 1 : -1;
+               btn.addEventListener('pointerdown', (e) => {
+                   e.preventDefault();
+                   startRotate(direction);
+               });
+               btn.addEventListener('pointerup', stopRotate);
+               btn.addEventListener('pointerleave', stopRotate);
+               btn.addEventListener('pointercancel', stopRotate);
            });
 
-
-           window.addEventListener('resize', onWindowResize);
+           lookPad?.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
        }
 
 

@@ -4065,37 +4065,65 @@ function renderQuizOverlay() {
 }
 
 function setupQuizInput() {
+  const canvasPointFromClient = (clientX, clientY) => {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height),
+    };
+  };
+
+  const chooseQuizOptionAt = (mx, my) => {
+    if (!quizState) return false;
+    const hitIndex = quizState._bounds?.findIndex(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) ?? -1;
+    if (hitIndex < 0) return false;
+
+    const opt = quizState.opts[hitIndex];
+    const cb = quizState.onCorrect;
+    if (quizState.ok.includes(opt)) {
+      quizState = null;
+      cb();
+    } else {
+      quizState.wrong = true;
+      quizState.wrongIdx = hitIndex;
+      setTimeout(() => {
+        if (quizState) { quizState.wrong = false; quizState.wrongIdx = -1; }
+      }, 700);
+    }
+    return true;
+  };
+
   canvas.addEventListener('click', e => {
     if (!quizState) return;
     e.stopPropagation();
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
-    const cb = quizState.onCorrect;
+    const p = canvasPointFromClient(e.clientX, e.clientY);
+    chooseQuizOptionAt(p.x, p.y);
+  });
+  canvas.addEventListener('touchend', e => {
+    if (!quizState) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const p = canvasPointFromClient(t.clientX, t.clientY);
+    chooseQuizOptionAt(p.x, p.y);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', e => {
+    if (!quizState) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const p = canvasPointFromClient(t.clientX, t.clientY);
+    quizState.hovered = -1;
     quizState._bounds?.forEach((b, i) => {
-      if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
-        const opt = quizState.opts[i];
-        if (quizState.ok.includes(opt)) {
-          quizState = null;
-          cb();
-        } else {
-          quizState.wrong = true;
-          quizState.wrongIdx = i;
-          setTimeout(() => {
-            if (quizState) { quizState.wrong = false; quizState.wrongIdx = -1; }
-          }, 700);
-        }
-      }
+      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) quizState.hovered = i;
     });
   });
   canvas.addEventListener('mousemove', e => {
     if (!quizState) return;
-    const rect = canvas.getBoundingClientRect();
-    const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const p = canvasPointFromClient(e.clientX, e.clientY);
     quizState.hovered = -1;
     quizState._bounds?.forEach((b, i) => {
-      if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) quizState.hovered = i;
+      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) quizState.hovered = i;
     });
   });
 }

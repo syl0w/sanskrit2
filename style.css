@@ -4,12 +4,25 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+:root {
+  --app-height: 100vh;
+  --mobile-control-bottom: max(20px, calc(env(safe-area-inset-bottom) + 18px));
+  --mobile-control-side: max(12px, env(safe-area-inset-left));
+  --mobile-control-side-right: max(12px, env(safe-area-inset-right));
+}
+
 body {
   background: #0a0a1a;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  min-height: var(--app-height);
   overflow: hidden;
   touch-action: manipulation;
 }
@@ -46,8 +59,8 @@ body.mobile-ui #mobile-controls {
 
 #mobile-joystick {
   position: absolute;
-  left: max(8px, env(safe-area-inset-left));
-  bottom: max(8px, env(safe-area-inset-bottom));
+  left: var(--mobile-control-side);
+  bottom: var(--mobile-control-bottom);
   pointer-events: auto;
   touch-action: none;
 }
@@ -83,8 +96,8 @@ body.mobile-ui #mobile-controls {
 
 #mobile-actions {
   position: absolute;
-  right: max(8px, env(safe-area-inset-right));
-  bottom: max(8px, env(safe-area-inset-bottom));
+  right: var(--mobile-control-side-right);
+  bottom: var(--mobile-control-bottom);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -136,19 +149,24 @@ body.mobile-ui #mobile-controls {
 
   #game-wrap {
     width: 100vw;
-    height: 100vh;
+    height: var(--app-height);
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
 
   #game-canvas {
     width: 100vw;
-    height: 100vh;
+    height: var(--app-height);
     max-width: 100vw;
-    max-height: 100dvh;
+    max-height: var(--app-height);
     border: none;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  #mobile-controls {
+    height: var(--app-height);
   }
 }

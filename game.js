@@ -368,6 +368,10 @@ function init() {
   setupTouchControls();
   setupMobileControls();
   updateMobileLayout();
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', updateMobileLayout);
+    window.visualViewport.addEventListener('scroll', updateMobileLayout);
+  }
   const urlParams = new URLSearchParams(location.search);
   mainMap = generateMap();
   groundItemState = GROUND_ITEMS.map(()=>false);
@@ -395,7 +399,13 @@ function isMobileControlTarget(target) {
   return target && !!target.closest('#mobile-controls');
 }
 
+function updateViewportSize() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
+}
+
 function updateMobileLayout() {
+  updateViewportSize();
   isMobileUI = window.matchMedia('(max-width: 768px), (pointer: coarse)').matches;
   document.body.classList.toggle('mobile-ui', isMobileUI);
 }

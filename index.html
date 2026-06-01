@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Mantra: The Resonant World</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕉️</text></svg>">
+  <meta name="description" content="A Sanskrit etymology adventure game.">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MANTRA">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=MedievalSharp&family=Uncial+Antiqua&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
   <style>
     @font-face {
@@ -45,5 +53,14 @@
   </div>
   <script src="data.js"></script>
   <script src="game.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {
+          // The game still works online if service worker registration fails.
+        });
+      });
+    }
+  </script>
 </body>
 </html>

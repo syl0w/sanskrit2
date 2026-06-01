@@ -423,7 +423,7 @@ function startGameFromTitle() {
 
 function getControlsHint() {
   if (isMobileUI) {
-    return 'Joystick: Move  ·  E: Interact  ·  I: Inventory  ·  B/L: Etymology Book';
+    return 'Joystick: Move  ·  E: Interact  ·  I: Inventory  ·  B: Etymology Book';
   }
   return 'WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  B / L: Etymology Book';
 }
@@ -433,7 +433,6 @@ function setupMobileControls() {
   const joyStick = document.getElementById('mobile-joystick-stick');
   const btnE = document.getElementById('btn-mobile-interact');
   const btnI = document.getElementById('btn-mobile-inv');
-  const btnL = document.getElementById('btn-mobile-lex');
   const btnB = document.getElementById('btn-mobile-book');
   if (!joyBase || !joyStick) return;
 
@@ -505,7 +504,6 @@ function setupMobileControls() {
     else pulseMobileKey('KeyE');
   });
   bindPulse(btnI, 'KeyI');
-  bindPulse(btnL, 'KeyL');
   bindPulse(btnB, 'KeyB');
 }
 

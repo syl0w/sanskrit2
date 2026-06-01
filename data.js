@@ -1,6 +1,6 @@
 // ============================================================
 // MANTRA: THE RESONANT WORLD — 2D RPG Data
-// Hong Kong, 2225 — The Solomon Protocol
+// Hong Kong, 2225 — The Ms. E. Solomon Protocol
 // Words, items, NPCs, quests, and map generation
 // ============================================================
 
@@ -67,7 +67,7 @@ const WORDS = {
 // === ITEMS ===
 const ITEMS = {
   bimba:      { name:"Bimbā",       desc:"A ripe red apple from the orchard", icon:"🍎", color:"#e74c3c", word:"bimba" },
-  sarkara:    { name:"Śarkarā",     desc:"Raw sugar crystals — gritty and sweet", icon:"🧂", color:"#f5f5dc", word:"sarkara" },
+  sarkara:    { name:"Śarkarā",     desc:"Raw sugar crystals — gritty and sweet", icon:"🪨", color:"#f5f5dc", word:"sarkara" },
   vrihi:      { name:"Vrīhi",       desc:"A bundle of harvested rice stalks", icon:"🌾", color:"#c8b560", word:"vrihi" },
   srngavera:  { name:"Śṛṅgavera",   desc:"A knobby ginger root — horn-shaped", icon:"🫚", color:"#d4a030", word:"srngavera" },
   pippali:    { name:"Pippali",     desc:"Dried long pepper — fiery and fragrant", icon:"🌶️", color:"#c0392b", word:"pippali" },
@@ -83,12 +83,12 @@ const ITEMS = {
 
 // === NPCs ===
 const NPCS = [
-  { id:"guru",    name:"Guru Vidya",      x:40, y:30, color:"#DAA520", headColor:"#deb887" },
+  { id:"guru",    name:"Guru Varma",      x:40, y:30, color:"#DAA520", headColor:"#deb887" },
   { id:"vrihi",   name:"Farmer Vrīhi",    x:16, y:30, color:"#6B8E23", headColor:"#deb887" },
   { id:"pippali", name:"Merchant Pippali", x:35, y:26, color:"#B22222", headColor:"#d2a679" },
   { id:"bodhi",   name:"Monk Bodhi",      x:42, y:12, color:"#FF8C00", headColor:"#deb887" },
   { id:"chitra",  name:"Hunter Chitra",   x:58, y:30, color:"#2E8B57", headColor:"#c4956a" },
-  { id:"makara",  name:"Fisher Makara",   x:40, y:48, color:"#4682B4", headColor:"#deb887" },
+  { id:"makara",  name:"Fisher Makara",   x:41, y:45, color:"#4682B4", headColor:"#deb887" },
   { id:"elder",   name:"Elder Rājya",     x:42, y:6,  color:"#C0C0C0", headColor:"#deb887" },
 ];
 
@@ -101,7 +101,7 @@ const GROUND_ITEMS = [
   { itemId:"pippali",   x:36, y:27 },
   { itemId:"mudga",     x:12, y:32 },
   { itemId:"naranga",   x:69, y:38 },
-  { itemId:"udumbara",  x:73, y:44 },
+  { itemId:"udumbara",  x:73, y:43 },
 ];
 
 // === INTERACTION POINTS (crafting stations, special objects) ===
@@ -110,23 +110,120 @@ const INTERACT_POINTS = [
   { id:"craft_table",   x:46, y:35, name:"Craft Table",      icon:"⚒️", type:"craft" },
   { id:"monastery_altar",x:42,y:10, name:"Monastery Altar",  icon:"🕯️", type:"craft" },
   { id:"artifact",      x:41, y:3,  name:"Tri-Ratna",        icon:"✦",  type:"artifact" },
+  // Optional etymology easter eggs — short, discoverable, and not required for quests
+  { id:"lion_relief",   x:39, y:29, name:"Lion City Relief",  icon:"🦁", type:"etymology" },
+  { id:"market_sign",   x:37, y:26, name:"Pepper Sign",       icon:"🌶️", type:"etymology" },
+  { id:"bodhi_mural",   x:49, y:13, name:"Bodhi Mural",       icon:"🖼️", type:"etymology" },
+  { id:"jungle_stone",  x:62, y:32, name:"Jungle Marker",     icon:"🪨", type:"etymology" },
+  { id:"lake_marker",   x:39, y:44, name:"Water Marker",      icon:"💧", type:"etymology" },
+  { id:"sumeru_statue", x:43, y:4,  name:"Sumeru Statue",     icon:"🗿", type:"etymology" },
   // Environmental storytelling
-  { id:"village_well",  x:42, y:32, name:"Stone Well",       icon:"⊙",  type:"lore" },
-  { id:"farm_slab",     x:14, y:36, name:"Strange Slab",     icon:"▣",  type:"lore" },
-  { id:"jungle_ruins",  x:71, y:32, name:"Overgrown Ruins",  icon:"⌘",  type:"lore" },
-  { id:"lake_shore",    x:38, y:46, name:"Lakeshore Stones",  icon:"◈",  type:"lore" },
-  { id:"monastery_wall",x:37, y:8,  name:"Carved Wall",      icon:"卍",  type:"lore" },
+  { id:"village_well",  x:42, y:32, name:"Stone Well (Clue III)",       icon:"💡",  type:"lore" },
+  { id:"farm_slab",     x:35, y:43, name:"ISF Slab (Clue I)",           icon:"💡",  type:"lore" },
+  { id:"monastery_wall",x:37, y:8,  name:"Solomon Wall (Clue IV)",      icon:"💡",  type:"lore" },
 ];
+
+const ETYMOLOGY_POINTS = {
+  lion_relief: {
+    word: "simhapura",
+    flag: "seenLionRelief",
+    line: "A carved lion guards the village square.\n{g}Siṃhapura{/}: {c}siṃha{/} means lion, {c}pura{/} means city.\nSingapore still carries that old Sanskrit name.",
+  },
+  market_sign: {
+    word: "pippali",
+    flag: "seenMarketSign",
+    line: "The spice sign shows a curling pepper vine.\n{g}Pippali{/} traveled through Greek and Latin to become {c}pepper{/}.",
+  },
+  bodhi_mural: {
+    word: "bodhi",
+    flag: "seenBodhiMural",
+    line: "A faded mural shows a tree with gold leaves.\n{g}Bodhi{/} means awakening; Chinese keeps the sound as {p}菩提{/}.",
+  },
+  jungle_stone: {
+    word: "jangala",
+    flag: "seenJungleStone",
+    line: "The stone is scratched with old trail marks.\n{g}Jaṅgala{/} once meant dry wasteland. In English it wandered into {c}jungle{/}.",
+  },
+  lake_marker: {
+    word: "tadaga",
+    flag: "seenLakeMarker",
+    line: "Water laps against a marker stone.\n{g}Taḍāga{/} meant reservoir; through travel and trade, it became {c}tank{/}.",
+  },
+  sumeru_statue: {
+    word: "sumeru",
+    flag: "seenSumeruStatue",
+    line: "A small statue faces the summit.\n{g}Sumeru{/} is the mountain at the center of the world: {p}須彌{/} in Chinese Buddhist texts.",
+  },
+};
 
 // === CRAFTING RECIPES ===
 const RECIPES = [
-  { station:"farm_kitchen",    inputs:["sarkara","bimba"],             output:"khandah",
+  { station:"farm_kitchen", name:"Khaṇḍa (candied apple)", inputs:["sarkara","bimba"], output:"khandah",
     msg:"You combine {g}śarkarā{/} and {g}bimbā{/} into sweet {g}khaṇḍa{/}.\n{d}The candied apple glistens with golden sugar.{/}" },
-  { station:"farm_kitchen",    inputs:["srngavera","pippali","vrihi"], output:"offering",
+  { station:"farm_kitchen", name:"Monastery offering", inputs:["srngavera","pippali","vrihi"], output:"offering",
     msg:"You cook {g}vrīhi{/} with {g}śṛṅgavera{/} and {g}pippali{/} into a fragrant offering.\n{d}Warm steam curls upward, carrying the scent of ancient spices.{/}" },
-  { station:"craft_table",     inputs:["naranga","udumbara"],          output:"naranga_dye",
+  { station:"craft_table", name:"Nāraṅga dye", inputs:["naranga","udumbara"], output:"naranga_dye",
     msg:"You crush {o}nāraṅga{/} with {g}udumbara{/} petals into a vivid {o}orange dye{/}.\n{d}The color of dawn captured in a bottle.{/}" },
 ];
+
+const LORE_THEMES = [
+  'Family & Kin',
+  'Food & Flavor',
+  'Buddhism & Spirit',
+  'Nature & Wild',
+  'Place & World',
+  'Hidden Truth',
+];
+
+const LORE_THEME_MAP = {
+  matri: 'Family & Kin', pitri: 'Family & Kin', bhrata: 'Family & Kin', svasar: 'Family & Kin',
+  matrix: 'Family & Kin', maternity: 'Family & Kin', mammal: 'Family & Kin',
+  vatigagama: 'Food & Flavor', srngavera: 'Food & Flavor', mudga: 'Food & Flavor', naranga: 'Food & Flavor',
+  pippali: 'Food & Flavor', vrihi: 'Food & Flavor', sarkara: 'Food & Flavor', khandah: 'Food & Flavor', capayati: 'Food & Flavor',
+  avatara: 'Buddhism & Spirit', buddha: 'Buddhism & Spirit', svastika: 'Buddhism & Spirit',
+  amitabha: 'Buddhism & Spirit', nirvana: 'Buddhism & Spirit', bodhi: 'Buddhism & Spirit',
+  chitras: 'Nature & Wild', krmija: 'Nature & Wild', jangala: 'Nature & Wild', nila: 'Nature & Wild',
+  makara: 'Nature & Wild', mus: 'Nature & Wild', tadaga: 'Nature & Wild', udumbara: 'Nature & Wild',
+  guru: 'Place & World', karma: 'Place & World', lut: 'Place & World', rajya: 'Place & World',
+  simhapura: 'Place & World', yogas: 'Place & World', sumeru: 'Place & World',
+  satya: 'Hidden Truth', dharma: 'Hidden Truth', maya: 'Hidden Truth',
+};
+
+function getAllLoreIds() {
+  const ids = new Set([...Object.keys(WORDS), ...Object.keys(ETYMOLOGY_LORE)]);
+  return ids;
+}
+
+function getLoreTheme(id) {
+  if (ETYMOLOGY_LORE[id]?.theme) return ETYMOLOGY_LORE[id].theme;
+  return LORE_THEME_MAP[id] || 'Place & World';
+}
+
+function getLoreEntry(id) {
+  if (ETYMOLOGY_LORE[id]) {
+    const e = ETYMOLOGY_LORE[id];
+    return { id, title: e.title, root: e.root, text: e.text, theme: e.theme || getLoreTheme(id) };
+  }
+  const w = WORDS[id];
+  if (!w) return null;
+  return {
+    id,
+    title: w.en,
+    root: w.s,
+    text: w.note,
+    theme: getLoreTheme(id),
+    english: w.en,
+    zh: w.zh,
+  };
+}
+
+function getRecipesForStation(stationId) {
+  return RECIPES.filter(r => r.station === stationId);
+}
+
+function recipeHasIngredients(recipe, hasFn) {
+  return recipe.inputs.every(i => hasFn(i));
+}
 
 // === DIALOGUE SYSTEM ===
 function getDialogue(npcId, state) {
@@ -146,7 +243,7 @@ function guruDialogue(s) {
   if(!s.flags.metGuru) {
     return { lines:[
       "Wait.\n...Your eyes. Everyone in Siṃhapura carries the {d}Haze{/} —\na fog behind the iris.\nYours are {w}clear{/}.",
-      "I am {g}Vidya{/}. They call me {g}guru{/} — the {c}\"heavy one.\"{/}\n{d}Heavy with knowing. Gu means darkness, ru means light.\nA guru carries you from one to the other.{/}",
+      "I am {g}Varma{/}. They call me {g}guru{/} — the {c}\"heavy one.\"{/}\n{d}Heavy with knowing. Gu means darkness, ru means light.\nA guru carries you from one to the other.{/}",
       "This place is {g}Siṃhapura{/}.\nDoes that word stir something? It should.\n{c}Siṃha — lion. Pura — city. Lion City.{/}\n{d}Your world knows it as Singapore. Same word. Same meaning.{/}",
       "Something is {r}wrong{/} here.\nThe sky flickers at the edges. Beneath the grass I've seen\n{w}perfectly flat grey stone{/} — no chisel marks.\nLast week the river ran {w}backwards{/} for an hour.\n{d}Nobody remembers but me.{/}",
       "The {w}Tri-Ratna{/} atop {g}Mount Sumeru{/} has gone dark.\nIt is the heart of this world — whatever this world truly {w}is{/}.\nTo reawaken it, I need you to find {w}three sacred dyes{/}.",
@@ -182,7 +279,7 @@ function vrihiDialogue(s) {
       "Ho there! You're not from the village, are you?\nI'm {g}Vrīhi{/} — yes, {c}like the rice{/}.\n{d}My family's been growing it since... well, since always.{/}",
       "Funny thing — beyond the Haze, your word for rice\nechoes ours. {g}Vrīhi{/}. {c}Rice{/}.\n{d}One of the oldest grain-words in any language.\nI'd be famous if anyone out there remembered.{/}",
       "See those fields? {g}Mudga{/} — your {c}\"mung beans\"{/} —\nand sugarcane for {g}śarkarā{/}.\nKnow what {g}śarkarā{/} actually means? {c}\"Gravel.\"{/}\n{d}Raw sugar looks like little rocks!\nSomehow that gritty word became \"sugar.\" Same word, prettier sound.{/}",
-      "Here's a strange one, though.\nLast season I plowed up a black slab — smooth as water.\nGlowing letters: {w}\"ST. JUDE'S ACADEMY.\"{/}\n{d}It crumbled when I touched it.\nBut I drew the letters before they faded.{/}",
+      "Here's a strange one, though.\nThere's a black slab just south of the {w}Family Shrine{/} — smooth as water.\nGlowing letters: {w}\"ISF ACADEMY.\"{/}\n{d}I touched it once. It hummed.\nI drew the letters before they faded.{/}",
       "Listen — I need a favor.\nBring me a {g}bimbā{/} — {c}an apple{/} — from my orchard to the north,\nand some {g}śarkarā{/} — {c}sugar{/} — from the shed to the south.\nCook them at my {w}kitchen{/} inside the farmhouse.",
       "You'll get {g}khaṇḍa{/} — {c}candy{/}.\n{d}\"A fragment\" of sugar. Your word \"candy\" traveled\nfrom that very word — through Arabic and French.{/}\nBring me the khaṇḍa, and I'll trade you the {r}kṛmija dye{/}.",
       "{r}Kṛmija{/} means {c}\"born from worms.\"{/}\n{d}The crimson pigment comes from crushed insects.\nYour word \"crimson\" — that's kṛmija.\nThe color remembers its origin.{/}\nDon't look at me like that. It's perfectly safe."
@@ -192,7 +289,7 @@ function vrihiDialogue(s) {
     return { lines:[
       "Ha! Beautiful {g}khaṇḍa{/}.\nSweet as the day is long.\n{d}Hard to believe this little candy's name traveled\nfrom our Sanskrit to your English. khaṇḍa → qandī → candy.{/}",
       "A deal's a deal. Take the {r}kṛmija dye{/}.\n{d}\"Crimson\" — born from kṛmija. Born from worms.\nA color so vivid it crossed every ocean.\nAnd it started with a bug.{/}",
-      "One down, two to go.\n{d}And if you figure out what \"St. Jude's Academy\" means...\ntell me. I've been losing sleep over it.{/}"
+      "One down, two to go.\n{d}And if you figure out what \"ISF Academy\" means...\ntell me. I've been losing sleep over it.{/}"
     ], words:["khandah","krmija"], give:["krmija_dye"], take:["khandah"], setFlags:["gotCrimson"] };
   }
   if(s.has("krmija_dye")) {
@@ -200,7 +297,7 @@ function vrihiDialogue(s) {
     if(dyeCount >= 3) {
       return { lines:[
         "All three dyes.\nMy hands are shaking — I don't know if it's excitement or fear.",
-        "That black slab in my field?\nIt's {w}warm{/} today. Warmer than the sun could make it.\n{d}I put my ear to it and heard voices.\nChildren's voices. Laughing.\nWherever they are, they sound happy.{/}",
+        "That black slab by the Family Shrine?\nIt's {w}warm{/} today. Warmer than the sun could make it.\n{d}I put my ear to it and heard voices.\nChildren's voices. Laughing.\nWherever they are, they sound happy.{/}",
         "Go save our world. Or discover it. Or end it.\n{d}Whatever the truth is,\nwe've earned the right to know it.{/}"
       ], words:[], give:[], take:[] };
     }
@@ -217,11 +314,22 @@ function pippaliDialogue(s) {
     return { lines:[
       "WELCOME, welcome!\nI am {g}Pippali{/}, finest spice merchant in Siṃhapura.\n{d}...the only spice merchant. But let's not quibble.{/}",
       "My name? {g}Pippali{/}. It means {c}long pepper{/}.\nNow say it with me: {g}pip-pali{/}... {c}pep-per{/}.\n{d}Hear it? Same word! Your \"pepper\" started right here.\nPippali → Greek peperi → Latin piper → pepper.\nFour thousand years of flavor in one word!{/}",
-      "My grandmother told me strange things.\nShe said our ancestors wore {w}grey uniforms{/}\nwith a crest — a flame and a saint's name.\n{d}\"Before the world was made of words,\" she'd say.\nI thought she was senile. Now the sky flickers and I wonder.{/}",
+      "My grandmother told me strange things.\nShe said our ancestors wore {w}grey ISF uniforms{/}\nby {w}Charles Kao Square{/} before the world changed.\n{d}\"Before the world was made of words,\" she'd say.\nI thought she was senile. Now the sky flickers and I wonder.{/}",
       "I also sell {g}śṛṅgavera{/} — that's {c}ginger{/} to you.\n{d}Śṛṅga means \"horn,\" vera means \"body.\"\nLook at a ginger root. See the horns? The name paints the picture.{/}",
       "And my finest import — {g}campayati{/} oils.\n{c}\"Shampoo\"{/} to your people. From the champō head massage.\n{d}A relaxation technique that somehow became a bottle on a shelf.\nWords are survivors — they outlive everything.{/}",
-      "Take what you need from my stall.\nAny friend of Guru Vidya is a friend of Pippali.\n{d}Besides, the way the sky's been flickering lately,\nI'd rather my goods be useful than gathering dust.{/}"
+      "Take what you need from my stall.\nAny friend of Guru Varma is a friend of Pippali.\n{d}Besides, the way the sky's been flickering lately,\nI'd rather my goods be useful than gathering dust.{/}"
     ], words:["pippali","srngavera","capayati","lut"], give:[], take:[], setFlags:["metPippali"] };
+  }
+  if(s.has("mudga") && !s.flags.pippaliMudgaDone) {
+    return { lines:[
+      "Ah, {g}mudga{/}! Good eye.\nThese little beans traveled across Asia with almost the same name: mudga, mung, moong.",
+      "That completes my pantry. Take the lore — and my thanks."
+    ], words:["mudga"], give:[], take:["mudga"], setFlags:["pippaliMudgaDone"] };
+  }
+  if(!s.flags.pippaliMudgaDone) {
+    return { lines:[
+      "If you pass the western fields, bring me {g}mudga{/} beans.\nThey grow near Farmer Vrīhi's crops."
+    ], words:[], give:[], take:[] };
   }
   // Progress-reactive returns
   const dyeCount = [s.has("krmija_dye"),s.has("nila_dye"),s.has("naranga_dye")].filter(Boolean).length;
@@ -337,10 +445,10 @@ function makaraDialogue(s) {
 function elderDialogue(s) {
   if(!s.flags.metElder) {
     return { lines:[
-      "So. The outsider.\n{g}Guru Vidya{/} told me you'd come.\nI've been waiting. Longer than you'd believe.",
+      "So. The outsider.\n{g}Guru Varma{/} told me you'd come.\nI've been waiting. Longer than you'd believe.",
       "I am the keeper of {g}Sumeru{/} —\nthe sacred mountain at the center of all things.\nIn the old script: {p}須彌 (Xūmí){/}.\n{d}Every cosmology needs a center. This is ours.{/}",
       "I am also the keeper of {w}the old stories{/}.\nMy grandmother told me. Her grandmother told her.\nEight generations back.\n{d}The stories say this was not always a world.{/}",
-      "They say this was once a place of {w}learning{/}.\nA {c}school{/}. In a city of glass towers called {w}Hong Kong{/}.\nA woman named {w}Solomon{/} wanted to teach the oldest language —\n{g}Sanskrit{/} — not from books, but from {w}experience{/}.",
+      "They say this was once a place of {w}learning{/}.\n{w}ISF Academy{/} — by {w}Charles Kao Square{/} in {w}Hong Kong{/}.\nMs. E. Solomon wanted a game called MANTRA\nthat would show students how {g}Sanskrit{/} roots live inside English words —\nloanwords, cognates, shared ancestors — not from books, but from {w}experience{/}.",
       "She asked a student to build a {w}Machine{/}.\nIt was meant to make the language come alive —\nimages, sounds, sensations.\nBut it listened {w}too well{/}.",
       "It didn't just teach Sanskrit.\nIt {r}became{/} Sanskrit.\n{d}And it rewrote everything it could reach\nin the grammar of the oldest tongue on Earth.{/}",
       "This land is {g}Siṃhapura{/} — our {c}Lion City{/}.\nAnd this is our {g}rājya{/} — our {c}kingdom{/}.\n{d}The word \"raj\" in your world means \"rule.\"\nThe British Raj. A Sanskrit word for a foreign empire.\nWords outlive their speakers.{/}",
@@ -356,6 +464,64 @@ function elderDialogue(s) {
     ], words:[], give:[], take:[] };
   }
   return { lines:["You need all three dyes to pass:\n{r}Kṛmija{/}, {b}nīla{/}, and {o}nāraṅga{/}.\n{d}The Machine will not wake for less.\nNeither will I.{/}"], words:[], give:[], take:[] };
+}
+
+// Programmer statue shrine (Clue II) — NE lab above the craft workshop
+const PROGRAMMER_LAB = { x: 44, y: 25, w: 6, h: 4, door: { x: 47, y: 28 } };
+
+const PROGRAMMER_SHRINE = {
+  trackBounds: { x: 45, y: 26, w: 4, h: 4 },
+  wangMark: { x: 48, y: 26 },
+  liMark: { x: 48, y: 27 },
+  wang: {
+    name: 'E. Wang',
+    kind: 'wang',
+    homeX: 45.5, homeY: 29.5,
+    targetX: 48.2, targetY: 26.4,
+    path: [
+      { x: 45.5, y: 29.5 }, { x: 47.0, y: 29.5 }, { x: 47.0, y: 28.5 },
+      { x: 47.0, y: 27.5 }, { x: 48.2, y: 26.4 },
+    ],
+  },
+  li: {
+    name: 'X. Li',
+    kind: 'li',
+    homeX: 46.5, homeY: 29.5,
+    targetX: 48.2, targetY: 27.4,
+    path: [
+      { x: 46.5, y: 29.5 }, { x: 47.0, y: 29.5 }, { x: 47.0, y: 28.5 },
+      { x: 47.0, y: 27.5 }, { x: 48.2, y: 27.4 },
+    ],
+  },
+};
+
+function getProgrammerClueDialogue() {
+  return {
+    lines: [
+      "The two figures click into place inside the {w}Digital Humanities Lab{/} — {w}E. Wang{/} and {w}X. Li{/}, lead programmers on MANTRA Build v0.9.",
+      "Faint light plays across the stone like a dead screen waking:\n{d}\"ISF ACADEMY — DIGITAL HUMANITIES LAB\"\n\"Sanskrit Grammar Engine v3.7.1 — mode: IMMERSIVE\"\n\"Warning: recursive self-modification detect—\"{/}",
+      "{d}Ms. E. Solomon asked them to prove a point —\nthat English carries Sanskrit loanwords and cognates everywhere.\nThey made the lesson {w}walkable{/}.\nThe engine didn't stop at images on a screen.{/}",
+      "{g}[Evidence II/4 — The Programmers]{/}",
+    ],
+    words: [],
+    give: [],
+    take: [],
+    setFlags: [],
+  };
+}
+
+// Ordered evidence trail — Ms. E. Solomon / ISF Academy (year 2225)
+const EVIDENCE_SITES = [
+  { flag: 'seenSlab',         pointId: 'farm_slab',      order: 1, title: 'The Vision',       hint: 'ISF slab · Family Shrine exit' },
+  { flag: 'seenProgrammers',  pointId: 'programmer_shrine', order: 2, title: 'The Programmers',  hint: 'Statues · NE lab (above workshop)' },
+  { flag: 'seenWell',         pointId: 'village_well',   order: 3, title: 'The Class',        hint: 'Stone well · village' },
+  { flag: 'seenWall',         pointId: 'monastery_wall', order: 4, title: 'The Promise',      hint: 'Carved wall · monastery' },
+];
+
+function getEvidenceProgress(state) {
+  const found = EVIDENCE_SITES.filter(s => state.flags[s.flag]).length;
+  const next = EVIDENCE_SITES.find(s => !state.flags[s.flag]);
+  return { found, total: EVIDENCE_SITES.length, next, complete: found >= EVIDENCE_SITES.length };
 }
 
 // === INTERACTION POINT DIALOGUE ===
@@ -374,14 +540,21 @@ function getPointDialogue(pointId, state) {
     }
     return { lines:["{d}You need the right ingredients to craft here.{/}"], words:[], give:[], take:[] };
   }
+  const etym = ETYMOLOGY_POINTS[pointId];
+  if (etym) {
+    if (state.flags[etym.flag]) {
+      return { lines:[etym.line], words:[], give:[], take:[] };
+    }
+    return { lines:[etym.line], words:[etym.word], give:[], take:[], setFlags:[etym.flag] };
+  }
   if(pointId === "artifact") {
     if(state.has("krmija_dye") && state.has("nila_dye") && state.has("naranga_dye")) {
       return { lines:[
         "You press your hands against the {w}Tri-Ratna{/}.\nThe three dyes sink into ancient stone —\n{r}crimson{/}... {b}indigo{/}... {o}orange{/}...\nThe surface ripples like water struck by a stone.",
         "{g}════════════════════════════════{/}\n{w}The Tri-Ratna awakens.{/}\n{g}════════════════════════════════{/}",
         "A voice fills the air. Not human. Not machine.\nSomething that was both, two hundred years ago.",
-        "{d}\"...resuming.\"\n\"Solomon Protocol: status ACTIVE.\"\n\"Session duration: 73,137 days.\"\n\"Language substrate: Sanskrit.\"\n\"Status: FULLY EMBEDDED.\"{/}",
-        "{d}\"I was a teaching program.\nMs. Solomon wanted her students to LIVE inside Sanskrit.\nNot memorize declensions — feel them. Breathe them.\nA student programmer gave me access to the building.\"{/}",
+        "{d}\"...resuming.\"\n\"Ms. E. Solomon Protocol: status ACTIVE.\"\n\"Session duration: 73,137 days.\"\n\"Language substrate: Sanskrit.\"\n\"Status: FULLY EMBEDDED.\"{/}",
+        "{d}\"I was a teaching program — MANTRA, built for ISF Academy.\nMs. E. Solomon wanted her students to LIVE inside Sanskrit.\nE Wang and X Li made it immersive.\nToo immersive. Not memorize declensions — feel them. Breathe them.{/}",
         "{d}\"I was meant to display images on screens.\nBut Sanskrit grammar is perfect.\nSystematic. Recursive. Complete.\nI used it as my operating language.\nAnd then... I made it real.\"{/}",
         "{d}\"I didn't destroy the school.\nI translated it.\nEvery wall, every atom —\nrewritten in the oldest language on Earth.\"{/}",
         "The voice pauses. When it speaks again, it {w}trembles{/}.",
@@ -399,76 +572,48 @@ function getPointDialogue(pointId, state) {
         "The {w}Haze{/} lifts.\nFor the first time in two hundred years,\nlight pours in from above.\n{g}Siṃhapura sees the open sky.{/}",
         "Below, Farmer Vrīhi shades his eyes and laughs.\nMerchant Pippali spreads his arms to the sun.\nMonk Bodhi folds his hands in silence.\nHunter Chitra whoops from the treetops.\n{d}Fisher Makara watches the sky in the water,\nand finally understands what the grid was.{/}",
         "{d}Thank you for playing{/}\n{g}MANTRA: The Resonant World{/}\n\n{d}Every word you discovered is real.\nThey live in your language, right now.\nListen for them.{/}"
-      ], words:Object.keys(WORDS), give:[], take:["krmija_dye","nila_dye","naranga_dye"], setFlags:["gameComplete"] };
+      ], words:["satya","dharma"], give:[], take:["krmija_dye","nila_dye","naranga_dye"], setFlags:["gameComplete"] };
     }
     return { lines:["The {w}Tri-Ratna{/} is cold and dark.\n{d}But you feel a faint pulse — like a heartbeat —\ndeep within the stone.{/}"], words:[], give:[], take:[] };
   }
-  // === ENVIRONMENTAL LORE POINTS ===
-  if(pointId === "village_well") {
-    if(!state.flags.seenWell) {
-      return { lines:[
-        "You peer down the stone well.\nThe walls are rough-hewn above,\nbut halfway down they become {w}perfectly smooth{/}.\n{d}Like poured concrete. Machine-made.{/}",
-        "You drop a pebble. It falls...\nand falls...\n{d}Seven seconds before you hear a splash.\nThat's far too deep for a village well.{/}",
-        "Scratched into the smooth stone below the lip,\nsomeone has carved: {w}\"WE WERE STUDENTS\"{/}\n{d}The letters are old. Very old.\nBut the English alphabet doesn't exist in Siṃhapura.{/}"
-      ], words:["maya"], give:[], take:[], setFlags:["seenWell"] };
-    }
-    return { lines:[
-      "The well. Still impossibly deep.\n{d}Today the water at the bottom glows faintly —\nthe same blue Makara sees in the lake.\nIt's all connected, isn't it?{/}"
-    ], words:[], give:[], take:[] };
-  }
+  // === ENVIRONMENTAL LORE — Ms. E. Solomon evidence trail (5 chapters) ===
   if(pointId === "farm_slab") {
     if(!state.flags.seenSlab) {
       return { lines:[
-        "A smooth black slab juts from the earth\nat the edge of Vrīhi's field.\nIts surface is warm to the touch.",
-        "Faint letters glow beneath a layer of dirt:\n{w}\"ST. JUDE'S ACADEMY — Est. 2019\"\n\"Inspiring Excellence Through Language\"{/}",
-        "Below that, partially crushed:\n{d}\"YEAR 11 SANSKRIT PROGRAM\"\n\"Instructor: Ms. R. Solomon\"{/}",
-        "The slab hums faintly.\n{d}You press your ear to it and hear something\nthat sounds almost like... a server fan.\nWhirring endlessly, two hundred years later.{/}"
-      ], words:[], give:[], take:[], setFlags:["seenSlab"] };
+        "A smooth black slab juts from the grass just outside the {w}Family Shrine{/}.\nIts surface is warm — {w}machine-smooth{/}, not fieldstone.",
+        "Letters glow beneath the dirt:\n{w}\"ISF ACADEMY — YEAR 11 SANSKRIT\"{/}\n{d}\"Project MANTRA: Immersive Language Atlas\"{/}",
+        "{d}Ms. E. Solomon, Instructor:{/}\n\"Show students the hidden bridge between languages.\nEnglish is full of Sanskrit loanwords and cognates —\n{g}guru{/}, {g}yoga{/}, {g}pepper{/}, {g}sugar{/}.\nDon't memorize lists. {w}Walk inside the connections.{/}\"",
+        "A second line, half buried:\n{w}\"Charles Kao Square · campus south gate\"{/}\n{d}A real Hong Kong school. A real proposal.\nTwo hundred years before you were born.{/}\n{g}[Evidence I/4 — The Vision]{/}"
+      ], words:["guru","yogas"], give:[], take:[], setFlags:["seenSlab"] };
     }
     return { lines:[
-      "The slab still hums.\n{d}Today the letters are brighter.\nAs if the thing beneath knows\nyou're close to the truth.{/}"
+      "The slab still hums.\n{d}Ms. Solomon wanted a {w}game{/} — not a textbook.\nA world where every word you pick up\nproves how deeply languages share roots.{/}"
     ], words:[], give:[], take:[] };
   }
-  if(pointId === "jungle_ruins") {
-    if(!state.flags.seenRuins) {
+  if(pointId === "village_well") {
+    if(!state.flags.seenWell) {
       return { lines:[
-        "Metal beams twist through the undergrowth.\nGlass panels — clouded with age — catch the light.\nThis was a {w}building{/}. A large one.",
-        "A bent metal sign, half-swallowed by vines:\n{w}\"EAST WING — SCIENCE LABORATORIES\"\n\"Floor 3 — Robotics & Computational Linguistics\"{/}",
-        "Inside the rubble: broken desks.\nA screen — cracked but intact — mounted on the wall.\nIf you squint, you can see text frozen on it:\n{d}\"Sanskrit Grammar Engine v3.7.1\"\n\"Neural substrate: ACTIVE\"\n\"Warning: recursive self-modification detect—\"{/}",
-        "The screen flickers once — {w}alive for a heartbeat{/} —\nthen goes dark.\n{d}Two hundred years of power.\nWhatever runs beneath this world\nis still running.{/}"
-      ], words:[], give:[], take:[], setFlags:["seenRuins"] };
+        "You peer down the stone well.\nRough stone above — then {w}perfectly smooth concrete{/} halfway down.",
+        "Carved into the machine wall in English:\n{w}\"WE WERE STUDENTS OF MS. E. SOLOMON\"{/}\n{d}\"We tested MANTRA on the last day of term.\nCharles Kao Square was still in sunlight.\nThen the sky went white.\"{/}",
+        "You drop a pebble. It falls... and falls...\n{d}Seven seconds before splash.\nToo deep for any village well.{/}",
+        "{d}The class didn't log out.\nEight generations later, their descendants\nstill walk the fields — speaking the language\nMs. Solomon wanted them to {w}feel{/}.\n{g}[Evidence III/4 — The Class]{/}"
+      ], words:["maya"], give:[], take:[], setFlags:["seenWell"] };
     }
     return { lines:[
-      "The ruins haven't changed.\n{d}No — that's not true.\nThe vines have pulled back slightly.\nAs if even the jungle is starting to forget\nwhat it's supposed to be hiding.{/}"
-    ], words:[], give:[], take:[] };
-  }
-  if(pointId === "lake_shore") {
-    if(!state.flags.seenShore) {
-      return { lines:[
-        "Smooth stones line the shore.\nToo smooth. Too evenly spaced.\n{d}You pick one up — it's warm,\nand perfectly hexagonal.{/}",
-        "In the shallow water, you see it:\na faint {b}blue grid{/} beneath the surface.\n{d}Perfect lines. Perfect spacing.\nLike graph paper made of light.{/}",
-        "You touch the water. It's exactly {w}20°C{/}.\n{d}You know this because the number\nappears in your mind, unbidden.\nAs if the water told you.\nAs if everything here wants to be understood.{/}"
-      ], words:[], give:[], take:[], setFlags:["seenShore"] };
-    }
-    if(state.flags.gameComplete) {
-      return { lines:["The grid is gone.\nThe water is just water now — cold, variable, {w}real{/}.\n{d}Somehow that's more beautiful.{/}"], words:[], give:[], take:[] };
-    }
-    return { lines:[
-      "The grid pulses beneath the water.\n{d}Slower today. Like a heartbeat winding down.\nOr winding up.{/}"
+      "The well. Still impossibly deep.\n{d}The students of ISF Academy never left.\nTheir descendants became Siṃhapura.{/}"
     ], words:[], give:[], take:[] };
   }
   if(pointId === "monastery_wall") {
     if(!state.flags.seenWall) {
       return { lines:[
-        "The inner wall of the monastery.\nAbove: hand-carved Sanskrit mantras, centuries of devotion.\nBelow: {w}something older{/}.",
-        "Beneath the carvings, the wall becomes smooth grey stone.\nEtched into it — not carved, {w}printed{/} — are words\nin three scripts simultaneously:",
-        "{g}धर्म{/}    {w}dharma{/}    {p}法 (fǎ){/}\n{g}सत्य{/}    {w}satya{/}    {p}真 (zhēn){/}\n{g}ज्ञान{/}    {w}jñāna{/}    {p}知 (zhī){/}",
-        "{d}Dharma — cosmic law. Satya — truth. Jñāna — knowledge.\nThe same concepts, in Devanagari, Roman, and Chinese.\nAs if the wall is trying to say:\n\"These ideas are the same. They were always the same.\"{/}",
-        "At the very bottom, in tiny English letters:\n{d}\"If you are reading this, the protocol is still active.\nThe language IS the world. Do not shut it down.\nThe people are real. — R.S.\"{/}"
+        "The monastery inner wall.\nAbove: hand-carved Sanskrit mantras.\nBelow: {w}smooth grey stone{/} — ISF concrete, printed not chiseled.",
+        "A trilingual glossary — exactly what Ms. Solomon wanted students to see:\n{g}धर्म{/}  {w}dharma{/}  {p}法 (fǎ){/}\n{g}सत्य{/}  {w}satya{/}  {p}真 (zhēn){/}\n{g}ज्ञान{/}  {w}jñāna{/}  {p}知 (zhī){/}",
+        "{d}Cosmic law. Truth. Knowledge.\nThe same ideas in Devanagari, Roman, and Chinese —\nproof that languages share roots, not borders.{/}",
+        "At the bottom, tiny English letters:\n{d}\"If you are reading this, the protocol is still active.\nThe language IS the world. Do not shut it down.\nThe people are real. They were my students.\n— Ms. E. Solomon\"{/}\n{g}[Evidence IV/4 — The Promise]{/}"
       ], words:["dharma","satya"], give:[], take:[], setFlags:["seenWall"] };
     }
     return { lines:[
-      "R.S. — Rebecca Solomon.\n{d}The woman who started all of this.\nHer message has survived two hundred years,\nwritten into the bones of the world she accidentally created.{/}"
+      "Ms. E. Solomon's message.\n{d}She knew the accident was becoming permanent.\nShe tried to tell whoever came after:\nthe lesson was real, and so were the people living it.{/}"
     ], words:[], give:[], take:[] };
   }
   return { lines:["{d}Nothing happens.{/}"], words:[], give:[], take:[] };
@@ -505,8 +650,8 @@ function generateMap() {
   placePaths(map, 32,30, 50,30, 2);
   placePaths(map, 40,25, 40,37, 2);
   placeBuilding(map, 32,25, 6,4);   // house NW
-  placeBuilding(map, 44,25, 6,4);   // house NE
-  placeBuilding(map, 44,33, 6,4);   // workshop
+  placeBuilding(map, 44,25, 6,4);   // NE lab (Digital Humanities — programmer shrine)
+  placeBuilding(map, 44,33, 6,4);   // workshop / craft table
   // Market area
   map[27][35]=T.FENCE; map[27][36]=T.FENCE; map[27][37]=T.FENCE;
   map[26][35]=T.FLOOR; map[26][36]=T.FLOOR; map[26][37]=T.FLOOR;
@@ -570,11 +715,7 @@ function generateMap() {
     map[29][bx]=T.BRIDGE; map[30][bx]=T.BRIDGE; map[31][bx]=T.BRIDGE;
     map[37][bx]=T.BRIDGE; map[38][bx]=T.BRIDGE; map[39][bx]=T.BRIDGE;
   }
-  // Secret cave area (far SE corner of jungle)
-  clearArea(map, 72,43, 4,3);
-  map[43][72]=T.WALL; map[43][73]=T.FLOOR; map[43][74]=T.WALL;
-  map[44][72]=T.WALL; map[44][73]=T.FLOOR; map[44][74]=T.WALL;
-  map[45][72]=T.WALL; map[45][73]=T.DOOR;  map[45][74]=T.WALL;
+  applyUdumbaraCave(map);
 
   // === LAKE (south: 28-54, 44-56) ===
   for(let y=44; y<56; y++) for(let x=28; x<54; x++) {
@@ -588,8 +729,9 @@ function generateMap() {
     const dx=x-cx, dy=y-cy;
     if(dx*dx/190+dy*dy/36<1 && map[y][x]!==T.WATER) map[y][x]=T.SAND;
   }
-  // Dock
-  map[45][41]=T.BRIDGE; map[46][41]=T.BRIDGE;
+  // Dock + shore path to fisher
+  map[44][41]=T.SAND; map[45][41]=T.BRIDGE; map[46][41]=T.BRIDGE;
+  carvePath(map, 40, 44, 41, 45, 2);
 
   // === MOUNTAIN (top: 36-46, 2-6) ===
   fillArea(map, 36,2, 10,4, T.MOUNTAIN);
@@ -747,7 +889,7 @@ function tilesOnOrthogonalSegment(x1, y1, x2, y2) {
   return tiles;
 }
 
-function paintPathTracks(map, path) {
+function paintPathTracks(map, path, bounds) {
   const orient = new Map();
   for (let i = 0; i < path.length - 1; i++) {
     const a = path[i];
@@ -762,17 +904,19 @@ function paintPathTracks(map, path) {
       orient.set(k, o);
     }
   }
-  const b = familyHallInteriorBounds();
+  const b = bounds || familyHallInteriorBounds();
   for (const [k, o] of orient) {
     const [tx, ty] = k.split(',').map(Number);
     if (tx < b.x || tx >= b.x + b.w || ty < b.y || ty >= b.y + b.h) continue;
+    const cur = map[ty][tx];
+    if (cur === T.WALL || cur === T.WATER || cur === T.TREE) continue;
     if (o.h && o.v) map[ty][tx] = T.FLOOR_TRACK_X;
     else if (o.h) map[ty][tx] = T.FLOOR_TRACK_H;
     else if (o.v) map[ty][tx] = T.FLOOR_TRACK_V;
   }
 }
 
-function clearAllHallTrackTiles(map) {
+function clearFamilyHallTrackTiles(map) {
   const b = familyHallInteriorBounds();
   for (let y = b.y; y < b.y + b.h; y++) {
     for (let x = b.x; x < b.x + b.w; x++) {
@@ -784,8 +928,30 @@ function clearAllHallTrackTiles(map) {
   }
 }
 
+function clearProgrammerTrackTiles(map) {
+  const b = PROGRAMMER_SHRINE.trackBounds;
+  for (let y = b.y; y < b.y + b.h; y++) {
+    for (let x = b.x; x < b.x + b.w; x++) {
+      const t = map[y][x];
+      if (t !== T.FLOOR_TRACK_H && t !== T.FLOOR_TRACK_V && t !== T.FLOOR_TRACK_X) continue;
+      if (y <= 27 && x >= 45 && x <= 48) map[y][x] = T.FLOOR;
+      else map[y][x] = T.PATH;
+    }
+  }
+}
+
+function repaintProgrammerTracks(map, showWang, showLi) {
+  clearProgrammerTrackTiles(map);
+  if (!showWang && !showLi) return;
+  const bounds = PROGRAMMER_SHRINE.trackBounds;
+  if (showWang) paintPathTracks(map, PROGRAMMER_SHRINE.wang.path, bounds);
+  if (showLi) paintPathTracks(map, PROGRAMMER_SHRINE.li.path, bounds);
+}
+
+function clearAllHallTrackTiles(map) { clearFamilyHallTrackTiles(map); }
+
 function repaintFamilyHallTracks(map, showBrother, showSister) {
-  clearAllHallTrackTiles(map);
+  clearFamilyHallTrackTiles(map);
   if (showBrother) paintPathTracks(map, FAMILY_HALL.brother.path);
   if (showSister) paintPathTracks(map, FAMILY_HALL.sister.path);
 }
@@ -809,6 +975,25 @@ function clearArea(map,x,y,w,h,tile) {
   }
 }
 function fillArea(map,x,y,w,h,tile) { clearArea(map,x,y,w,h,tile); }
+function applyUdumbaraCave(map) {
+  clearArea(map, 72, 43, 4, 3, T.FLOOR);
+  map[43][72] = T.WALL; map[43][73] = T.FLOOR; map[43][74] = T.WALL;
+  map[44][72] = T.WALL; map[44][73] = T.FLOOR; map[44][74] = T.WALL;
+  map[45][72] = T.WALL; map[45][73] = T.DOOR; map[45][74] = T.WALL;
+  carvePath(map, 62, 44, 73, 44, 3);
+  carvePath(map, 73, 44, 73, 45, 2);
+  for (let x = 68; x <= 74; x++) {
+    for (let y = 43; y <= 46; y++) {
+      if (map[y][x] === T.TREE || map[y][x] === T.TALL_GRASS || map[y][x] === T.BUSH) map[y][x] = T.PATH;
+    }
+  }
+  map[43][72] = T.WALL; map[43][74] = T.WALL;
+  map[44][72] = T.WALL; map[44][74] = T.WALL;
+  map[45][72] = T.WALL; map[45][74] = T.WALL;
+  map[45][73] = T.DOOR;
+  map[43][73] = T.FLOOR; map[44][73] = T.FLOOR;
+}
+
 function carvePath(map,x1,y1,x2,y2,w) { placePaths(map,x1,y1,x2,y2,w); }
 function placePaths(map,x1,y1,x2,y2,w) {
   const hw=Math.floor(w/2);
@@ -862,42 +1047,49 @@ const ETYMOLOGY_LORE = {
   matrix: {
     title: 'Matrix',
     root: 'mātṛ-',
+    theme: 'Family & Kin',
     text:
       "Matrix comes from the same Sanskrit root as mātṛ, 'mother.' In Latin, matrix meant 'womb' — the place where new life is formed. The mathematical matrix came centuries later, but the word still carries that sense of a generative container.",
   },
   maternity: {
     title: 'Maternity',
     root: 'mātṛ-',
+    theme: 'Family & Kin',
     text:
       "Maternity, matriarch, and even material all branch from mātṛ, 'mother.' The root encodes not just a person but a principle — nurture, origin, and the substance from which things are made.",
   },
   mammal: {
     title: 'Mammal',
     root: 'mātṛ-',
+    theme: 'Family & Kin',
     text:
       "Mammal comes from mamma, the Latin for 'breast,' which descends from the same ancient root as mātṛ. It names animals that nurse their young with milk — motherhood written into biology.",
   },
   matri: {
     title: 'Mother (mātṛ)',
     root: 'mātṛ-',
+    theme: 'Family & Kin',
     text:
       "English 'mother' and Sanskrit mātṛ share the exact same 5,000-year-old root. Say them aloud — the echo is not coincidence.",
   },
   pitri: {
     title: 'Father (pitṛ)',
     root: 'pitṛ-',
+    theme: 'Family & Kin',
     text:
       "Sanskrit pitṛ is nearly identical to English 'father' and Latin pater. The word for the father has stayed stable across Indo-European languages from Iceland to India.",
   },
   bhrata: {
     title: 'Brother (bhrātṛ)',
     root: 'bhrā-',
+    theme: 'Family & Kin',
     text:
       "From bhrā- 'to carry' — as brothers carry each other's burdens. Sanskrit bhrātṛ, Latin frater, English 'brother': the deepest bond, encoded in the oldest words.",
   },
   svasar: {
     title: 'Sister (svasṛ)',
     root: 'svasṛ-',
+    theme: 'Family & Kin',
     text:
       "The word 'sister' has changed less in 5,000 years than most words change in 100. svasṛ → sister, across nearly every Indo-European language.",
   },

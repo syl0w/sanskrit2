@@ -9,17 +9,20 @@ let player = { x: SPAWN_ROOM.player.x, y: SPAWN_ROOM.player.y, dir:0, speed:4.5,
 let camera = { x:0, y:0 };
 let keys = {}, prevKeys = {};
 let inventory = [];
-let discoveredWords = new Set();
 let flags = {};
 let groundItemState = [];
 let dialogueState = null;
-let wordPopup = null;
-let wordPopupQueue = [];
+let loreToast = null;
+let loreToastQueue = [];
 let showInventory = false;
-let showLexicon = false;
 let showEtymologyBook = false;
 let etymologyBookScroll = 0;
+let inventoryScroll = 0;
+let craftPanel = null;
 let discoveredEtymology = new Set();
+let programmerStatues = null;
+let questGuidePath = null;
+let questGuidePathKey = '';
 let time = 0;
 let gameStarted = false;
 let titleFade = 0;        // 0→1 fade from title to game
@@ -96,21 +99,18 @@ const MOTHER_QUIZ = {
 const SPAWN_TUTORIAL = {
   welcome:
     "You wake in cold stone.\n\n" +
-    "Hong Kong, 2225 — two centuries after the last teacher left the Sanskrit school beneath Siṃhapura. " +
-    "A program called MANTRA slept in the ruins… until something woke it. And you.\n\n" +
-    "The world outside is vast. But first — this chamber.",
+    "MANTRA is awake. First, escape this chamber.",
   controls:
-    "You remember how to move.\n\n" +
     "Joystick, WASD, or touch — walk the room.\n" +
     "E button or tap — speak, examine, or act on any statue or inscription.\n\n" +
     "When you're ready, find the sealed door to the south.",
   doorFail:
-    "The stone door will not budge. Runes older than the city trace its frame.\n\n" +
-    "In the corner, a Mother of stone watches in silence. She has heard every word spoken here for five thousand years. Press E at the statue — she may know the password.",
+    "The stone door will not budge.\n\n" +
+    "The Mother statue may know the password.",
   hallGuide1: 'Press E at any statue to speak, examine, or push it back.',
-  hallGuide2: 'The Brother and Sister stand off the grooves in the floor. Push them along the tracks to the niches on the left wall.',
-  hallGuide3: 'When the whole family stands together again, the Father will emerge from the stone.',
-  hallGuide4: 'Paintings hang on the hall walls — press E to read their mātṛ- root stories. Press B for your Etymology Book.',
+  hallGuide2: 'Push Brother and Sister along the tracks to the left wall.',
+  hallGuide3: 'When the family stands together, Father will appear.',
+  hallGuide4: 'Paintings are optional lore. Press B for the Etymology Book.',
   motherEarly:
     "The statue waits, patient as stone. Try the sealed door first — you'll understand why you're still here.",
 };
@@ -233,6 +233,8 @@ function beginMainWorld() {
   clampPlayerToSpawnRoom();
   snapCameraToTarget();
   buildMinimap();
+  initProgrammerStatues();
+  refreshProgrammerTracks();
   if (!flags.spawnTutorialDone) resetSpawnTutorial();
   else spawnTutorial = { step: 'done', doorTried: true };
 }
@@ -310,7 +312,7 @@ function getSpawnTutorialHint() {
       if (!spawnFamily.fatherDone) return 'Father statue · press E to speak';
       return 'Paintings on the walls · press B for Etymology Book';
     case 'guru':
-      return 'Find Guru Vidya at the village crossroads · press E to speak';
+      return 'Find Guru Varma at the village crossroads · press E to speak';
     default:
       return 'Tutorial Chamber';
   }
@@ -369,6 +371,8 @@ function init() {
   const urlParams = new URLSearchParams(location.search);
   mainMap = generateMap();
   groundItemState = GROUND_ITEMS.map(()=>false);
+  initProgrammerStatues();
+  refreshProgrammerTracks();
   flags.introComplete = !shouldPlayIntro(urlParams);
   // Always play spawn tutorial on load unless ?skipSpawn
   flags.spawnMotherDone = false;
@@ -409,9 +413,9 @@ function startGameFromTitle() {
 
 function getControlsHint() {
   if (isMobileUI) {
-    return 'Joystick: Move  ·  E: Interact  ·  I / L / B: Panels';
+    return 'Joystick: Move  ·  E: Interact  ·  I: Inventory  ·  B/L: Etymology Book';
   }
-  return 'WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  L: Lexicon  ·  B: Etymology Book';
+  return 'WASD / touch: Move  ·  E / tap: Interact  ·  I: Inventory  ·  B / L: Etymology Book';
 }
 
 function setupMobileControls() {
@@ -536,7 +540,7 @@ function setupTouchControls() {
       startGameFromTitle();
       return;
     }
-    if (!dialogueState && !showInventory && !showLexicon && !showEtymologyBook && !quizState) {
+    if (!dialogueState && !showInventory && !showEtymologyBook && !craftPanel && !quizState) {
       if (introMsg) dismissIntroMessage();
       else if (introActive) tryIntroInteract();
       else tryInteract();
@@ -548,7 +552,7 @@ function applyTouchMovement() {
   touch.dx = 0;
   touch.dy = 0;
   if (isMobileUI) return;
-  if (!touch.active || !gameStarted || dialogueState || showInventory || showLexicon || showEtymologyBook || quizState || introMsg) return;
+  if (!touch.active || !gameStarted || dialogueState || showInventory || showEtymologyBook || craftPanel || quizState || introMsg) return;
   const px = player.x * TILE_SIZE + TILE_SIZE / 2;
   const py = player.y * TILE_SIZE + TILE_SIZE / 2;
   const dx = touch.worldX - px;
@@ -581,7 +585,8 @@ function getMovementDelta() {
 function movePlayer(dx, dy, dt) {
   if (dx !== 0 || dy !== 0) {
     if (!isStatueSliding()) {
-      const spd = player.speed * dt;
+      const baseSpd = flags.sprintUnlocked && (isDown('ShiftLeft') || isDown('ShiftRight')) ? 7.2 : player.speed;
+      const spd = baseSpd * dt;
       const nx = player.x + dx * spd;
       const ny = player.y + dy * spd;
       if (canMoveTo(nx, player.y)) player.x = nx;
@@ -657,13 +662,13 @@ function update(dt) {
   }
 
   // World glitch effect — more frequent as words are discovered + lore found
-  const loreCount = ['seenWell','seenSlab','seenRuins','seenShore','seenWall'].filter(f=>flags[f]).length;
+  const loreCount = EVIDENCE_SITES.filter(s => flags[s.flag]).length;
   if(gameStarted && !glitchState.active) {
     glitchState.timer -= dt;
     if(glitchState.timer <= 0) {
       glitchState.active = true;
       glitchState.duration = 0.05 + Math.random() * 0.15 + loreCount * 0.02;
-      glitchState.timer = 6 + Math.random() * 12 - Math.min(discoveredWords.size * 0.4, 5) - loreCount * 0.8;
+      glitchState.timer = 6 + Math.random() * 12 - Math.min(discoveredEtymology.size * 0.4, 5) - loreCount * 0.8;
     }
   }
   if(glitchState.active) {
@@ -702,14 +707,37 @@ function update(dt) {
   }
 
   // Panels
-  if(justPressed('KeyI')||justPressed('Tab')) { showInventory=!showInventory; showLexicon=false; showEtymologyBook=false; }
-  if(justPressed('KeyL')) { showLexicon=!showLexicon; showInventory=false; showEtymologyBook=false; }
-  if(justPressed('KeyB')) { showEtymologyBook=!showEtymologyBook; showInventory=false; showLexicon=false; etymologyBookScroll=0; }
-  if(showInventory||showLexicon||showEtymologyBook) {
-    if(justPressed('Escape')) { showInventory=false; showLexicon=false; showEtymologyBook=false; }
+  if(justPressed('KeyI')||justPressed('Tab')) {
+    showInventory = !showInventory;
+    showEtymologyBook = false;
+    craftPanel = null;
+    inventoryScroll = 0;
+  }
+  if(justPressed('KeyB')||justPressed('KeyL')) {
+    showEtymologyBook = !showEtymologyBook;
+    showInventory = false;
+    craftPanel = null;
+    etymologyBookScroll = 0;
+  }
+  if(showInventory||showEtymologyBook||craftPanel) {
+    if(justPressed('Escape')) {
+      showInventory = false;
+      showEtymologyBook = false;
+      craftPanel = null;
+    }
     if(showEtymologyBook && discoveredEtymology.size > 0) {
-      if(justPressed('ArrowUp')||justPressed('KeyW')) etymologyBookScroll=Math.max(0, etymologyBookScroll-1);
+      if(justPressed('ArrowUp')||justPressed('KeyW')) etymologyBookScroll = Math.max(0, etymologyBookScroll - 1);
       if(justPressed('ArrowDown')||justPressed('KeyS')) etymologyBookScroll++;
+    }
+    if(showInventory) {
+      if(justPressed('ArrowUp')||justPressed('KeyW')) inventoryScroll = Math.max(0, inventoryScroll - 1);
+      if(justPressed('ArrowDown')||justPressed('KeyS')) inventoryScroll++;
+    }
+    if(craftPanel) {
+      const rows = getCraftPanelRows();
+      if(justPressed('ArrowUp')||justPressed('KeyW')) craftPanel.selected = Math.max(0, craftPanel.selected - 1);
+      if(justPressed('ArrowDown')||justPressed('KeyS')) craftPanel.selected = Math.min(Math.max(0, rows.length - 1), craftPanel.selected + 1);
+      if(justPressed('KeyE')) tryCraftFromPanel();
     }
     updateParticles(dt);
     return;
@@ -723,6 +751,7 @@ function update(dt) {
     updateSpawnFamilyStatues(dt);
     clampPlayerToSpawnRoom();
   }
+  updateProgrammerStatues(dt);
 
   // Interact
   if(justPressed('KeyE')) tryInteract();
@@ -731,12 +760,12 @@ function update(dt) {
   updateGameCamera(dt);
 
   // Word popup
-  if(wordPopup) {
-    wordPopup.timer-=dt;
-    wordPopup.slide=Math.min(1,wordPopup.slide+dt*4);
-    if(wordPopup.timer<=0) {
-      wordPopup=null;
-      if(wordPopupQueue.length>0) wordPopup=wordPopupQueue.shift();
+  if(loreToast) {
+    loreToast.timer -= dt;
+    loreToast.slide = Math.min(1, loreToast.slide + dt * 4);
+    if(loreToast.timer <= 0) {
+      loreToast = null;
+      if(loreToastQueue.length > 0) loreToast = loreToastQueue.shift();
     }
   }
 
@@ -871,6 +900,7 @@ function isSolid(tx,ty) {
   if(tx<0||ty<0||tx>=mapW||ty>=mapH) return true;
   if (introActive && introStatueBlocks(tx, ty)) return true;
   if (isInSpawnTutorial() && spawnFamilyStatueBlocks(tx, ty)) return true;
+  if (programmerStatueBlocks(tx, ty)) return true;
   return SOLID.has(map[ty][tx]);
 }
 function canMoveTo(x,y) {
@@ -910,7 +940,8 @@ function tryInteract() {
     return;
   }
   if (nearby.type === 'hallPainting') { tryHallPaintingInteract(nearby.target.id); return; }
-  if(nearby.type==='npc') {
+  if (nearby.type === 'programmerStatues') { tryProgrammerStatueInteract(); return; }
+  if (nearby.type==='npc') {
     const dlg=getDialogue(nearby.target.id,stateObj());
     dlg.speaker=nearby.target.name;
     dlg.speakerColor=nearby.target.color;
@@ -919,11 +950,16 @@ function tryInteract() {
     const gi=nearby.target, item=ITEMS[gi.itemId];
     inventory.push(gi.itemId);
     groundItemState[gi.index]=true;
-    discoverWord(item.word);
+    discoverLore(item.word);
     for(let i=0;i<8;i++) spawnParticle(gi.x*TILE_SIZE+TILE_SIZE/2,gi.y*TILE_SIZE+TILE_SIZE/2,'sparkle');
     startDialogue({lines:[`Picked up {g}${item.name}{/}!\n{d}${item.desc}{/}`],words:[],give:[],take:[]});
   } else if(nearby.type==='point') {
-    startDialogue(getPointDialogue(nearby.target.id,stateObj()));
+    const pt = nearby.target;
+    if (pt.type === 'craft') {
+      openCraftPanel(pt);
+      return;
+    }
+    startDialogue(getPointDialogue(pt.id, stateObj()));
   }
 }
 
@@ -931,6 +967,8 @@ function getNearby() {
   if (introActive) return getIntroNearby();
   const spawnNear = getSpawnNearby();
   if (spawnNear) return spawnNear;
+  const progNear = getProgrammerNearby();
+  if (progNear) return progNear;
   let best=null,bestDist=2.0;
   for(const npc of NPCS) {
     const d=dist(player.x,player.y,npc.x+0.5,npc.y+0.5);
@@ -952,12 +990,22 @@ function getNearby() {
 function dist(x1,y1,x2,y2){return Math.sqrt((x1-x2)**2+(y1-y2)**2);}
 
 // ─── DIALOGUE ───
+const MAX_DIALOGUE_LINES = 3;
+const MAX_LORE_PER_DIALOGUE = 2;
+
+function compactDialogueLines(lines) {
+  if (!lines || lines.length <= MAX_DIALOGUE_LINES) return lines || [];
+  return [lines[0], ...lines.slice(-(MAX_DIALOGUE_LINES - 1))];
+}
+
 function startDialogue(dlg) {
   if(!dlg||!dlg.lines||!dlg.lines.length) return;
-  dialogueState={lines:dlg.lines,index:0,charIndex:0,fullText:dlg.lines[0],
-    visLen:richLen(dlg.lines[0]),
+  const lines = compactDialogueLines(dlg.lines);
+  const words = (dlg.words || []).slice(0, MAX_LORE_PER_DIALOGUE);
+  dialogueState={lines,index:0,charIndex:0,fullText:lines[0],
+    visLen:richLen(lines[0]),
     speaker:dlg.speaker||null, speakerColor:dlg.speakerColor||'#ffd700',
-    words:dlg.words||[],give:dlg.give||[],take:dlg.take||[],setFlags:dlg.setFlags||[],applied:false};
+    words,give:dlg.give||[],take:dlg.take||[],setFlags:dlg.setFlags||[],applied:false};
   dialogueSlide=0;
 }
 
@@ -983,7 +1031,7 @@ function updateDialogue() {
       if(ds.index>=ds.lines.length) {
         if(!ds.applied) {
           ds.applied=true;
-          for(const w of ds.words) discoverWord(w);
+          for(const w of ds.words) discoverLore(w);
           for(const g of ds.give) {
             if(!inventory.includes(g)) inventory.push(g);
             if(g.includes('_dye')){screenFlash={alpha:0.6,color:ITEMS[g]?ITEMS[g].color:'#ffd700'};cameraShake.intensity=8;}
@@ -1004,25 +1052,23 @@ function updateDialogue() {
   }
 }
 
-// ─── WORD DISCOVERY ───
-function discoverWord(wordId) {
-  if(!wordId||discoveredWords.has(wordId))return;
-  const w=WORDS[wordId];
-  if(!w)return;
-  discoveredWords.add(wordId);
-  discoverEtymology(wordId);
-  const popup={word:w,id:wordId,timer:5,slide:0};
-  if(wordPopup) wordPopupQueue.push(popup);
-  else wordPopup=popup;
-  // Discovery feedback — flash and subtle shake
-  screenFlash = { alpha: 0.25, color: '#ffd700' };
-  cameraShake.intensity = Math.max(cameraShake.intensity, 3);
+// ─── LORE DISCOVERY (unified words + etymology) ───
+function discoverLore(loreId, opts = {}) {
+  if (!loreId || discoveredEtymology.has(loreId)) return false;
+  const entry = getLoreEntry(loreId);
+  if (!entry) return false;
+  discoveredEtymology.add(loreId);
+  if (!opts.silent) {
+    const toast = { entry, timer: 5, slide: 0 };
+    if (loreToast) loreToastQueue.push(toast);
+    else loreToast = toast;
+    screenFlash = { alpha: 0.25, color: '#ffd700' };
+    cameraShake.intensity = Math.max(cameraShake.intensity, 3);
+  }
+  return true;
 }
 
-function discoverEtymology(loreId) {
-  if (!loreId || !ETYMOLOGY_LORE[loreId] || discoveredEtymology.has(loreId)) return;
-  discoveredEtymology.add(loreId);
-}
+function discoverWord(wordId) { discoverLore(wordId); }
 
 // ─── MINIMAP ───
 function buildMinimap() {
@@ -1060,10 +1106,12 @@ function render() {
     } else {
       renderGroundItems();
       renderInteractPoints();
+      renderProgrammerStatues();
       renderNPCs();
       renderMotherStatueEntity();
       renderSpawnFamilyScene();
       if (!flags.spawnTutorialDone) renderSpawnLockedDoorWorld();
+      renderQuestGuideTargetMarker();
     }
     renderPlayer();
   }
@@ -1074,15 +1122,16 @@ function render() {
   renderVignette();
   renderParticles();
   renderInteractPrompt();
+  renderQuestGuideArrow();
   renderHUD();
   renderMinimap();
   renderDialogueBox();
-  renderWordPopup();
+  renderLoreToast();
   renderIntroMessage();
   renderQuizOverlay();
   if(showInventory) renderInventoryPanel();
-  if(showLexicon) renderLexiconPanel();
   if(showEtymologyBook) renderEtymologyBookPanel();
+  if(craftPanel) renderCraftPanel();
   renderScreenFlash();
   if (!introActive) renderGlitch();
 
@@ -1288,6 +1337,14 @@ function drawShrineStatue(kind, tx, ty, lit, label) {
     ctx.fillRect(cx + 6, cy - 8 + bob, 8, 2);
   } else if (kind === 'sister') {
     ctx.fillRect(cx - 5, cy - 12 + bob, 10, 3);
+  } else if (kind === 'wang') {
+    ctx.fillRect(cx - 6, cy - 10 + bob, 12, 2);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(cx - 4, cy - 6 + bob, 8, 4);
+  } else if (kind === 'li') {
+    ctx.fillRect(cx - 5, cy - 11 + bob, 10, 3);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(cx - 3, cy - 5 + bob, 6, 3);
   } else {
     ctx.fillRect(cx - 2, cy - 14 + bob, 4, 8);
   }
@@ -1315,11 +1372,13 @@ function drawShrineStatue(kind, tx, ty, lit, label) {
     ctx.textAlign = 'left';
   }
 
-  ctx.fillStyle = lit ? '#ffd700' : '#888';
-  ctx.font = `14px ${FONT_FALLBACK}`;
-  ctx.textAlign = 'center';
-  ctx.fillText(devLabels[kind] || '', cx, cy + 26 + bob);
-  ctx.textAlign = 'left';
+  if (devLabels[kind]) {
+    ctx.fillStyle = lit ? '#ffd700' : '#888';
+    ctx.font = `14px ${FONT_FALLBACK}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(devLabels[kind], cx, cy + 26 + bob);
+    ctx.textAlign = 'left';
+  }
 }
 
 function renderSpawnLockedDoorWorld() {
@@ -1565,50 +1624,72 @@ function drawTile(tile,x,y,col,row) {
 }
 
 // ─── ENTITIES ───
+function drawItemEmoji(item, cx, cy, size, opts = {}) {
+  const icon = item?.icon || '•';
+  const bob = opts.bob || 0;
+  const y = cy + bob;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (opts.shadow !== false) {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.font = `${size}px sans-serif`;
+    ctx.fillText(icon, cx + 1, y + 2);
+  }
+  if (opts.glow && item?.color) {
+    const grad = ctx.createRadialGradient(cx, y, 0, cx, y, size * 0.9);
+    grad.addColorStop(0, item.color + '35');
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(cx - size, y - size, size * 2, size * 2);
+  }
+  ctx.font = `${size}px sans-serif`;
+  ctx.fillText(icon, cx, y);
+  ctx.restore();
+}
+
 function renderGroundItems() {
-  for(let i=0;i<GROUND_ITEMS.length;i++){
-    if(groundItemState[i])continue;
-    const gi=GROUND_ITEMS[i], item=ITEMS[gi.itemId];
-    if(!item)continue;
-    const sx=gi.x*TILE_SIZE-camera.x+TILE_SIZE/2;
-    const sy=gi.y*TILE_SIZE-camera.y+TILE_SIZE/2+Math.sin(time*2.5+i)*4;
-    // Outer glow
-    const grad=ctx.createRadialGradient(sx,sy,0,sx,sy,16);
-    grad.addColorStop(0,item.color+'50');
-    grad.addColorStop(1,'transparent');
-    ctx.fillStyle=grad;
-    ctx.fillRect(sx-16,sy-16,32,32);
-    // Ring
-    ctx.strokeStyle=item.color+'60';
-    ctx.lineWidth=1;
-    ctx.beginPath();ctx.arc(sx,sy,8+Math.sin(time*3+i)*2,0,Math.PI*2);ctx.stroke();
-    // Core
-    ctx.fillStyle=item.color;
-    ctx.beginPath();ctx.arc(sx,sy,5,0,Math.PI*2);ctx.fill();
-    // Highlight
-    ctx.fillStyle='rgba(255,255,255,0.7)';
-    ctx.beginPath();ctx.arc(sx-1.5,sy-1.5,1.8,0,Math.PI*2);ctx.fill();
-    // Sparkle particles (occasional)
-    if(Math.random()<0.02) spawnParticle(gi.x*TILE_SIZE+TILE_SIZE/2,gi.y*TILE_SIZE+TILE_SIZE/2,'item_sparkle');
+  for (let i = 0; i < GROUND_ITEMS.length; i++) {
+    if (groundItemState[i]) continue;
+    const gi = GROUND_ITEMS[i], item = ITEMS[gi.itemId];
+    if (!item) continue;
+    const sx = gi.x * TILE_SIZE - camera.x + TILE_SIZE / 2;
+    const sy = gi.y * TILE_SIZE - camera.y + TILE_SIZE / 2;
+    const bob = Math.sin(time * 2.5 + i) * 3;
+    drawItemEmoji(item, sx, sy, 22, { bob, glow: true });
+    if (Math.random() < 0.015) spawnParticle(gi.x * TILE_SIZE + TILE_SIZE / 2, gi.y * TILE_SIZE + TILE_SIZE / 2, 'item_sparkle');
   }
 }
 
 function renderInteractPoints() {
-  for(const pt of INTERACT_POINTS) {
-    const sx=pt.x*TILE_SIZE-camera.x+TILE_SIZE/2;
-    const sy=pt.y*TILE_SIZE-camera.y+TILE_SIZE/2;
-    // Pulsing glow
-    const pulse=0.5+0.5*Math.sin(time*2);
-    const grad=ctx.createRadialGradient(sx,sy,0,sx,sy,18);
-    grad.addColorStop(0,`rgba(255,215,0,${0.15+pulse*0.1})`);
-    grad.addColorStop(1,'transparent');
-    ctx.fillStyle=grad;
-    ctx.fillRect(sx-18,sy-18,36,36);
-  ctx.font=`18px ${FONT_FANTASY}`;
-  ctx.textAlign='center';
-  ctx.fillText(pt.icon,sx,sy+8);
+  for (const pt of INTERACT_POINTS) {
+    const sx = pt.x * TILE_SIZE - camera.x + TILE_SIZE / 2;
+    const sy = pt.y * TILE_SIZE - camera.y + TILE_SIZE / 2;
+    const pulse = 0.5 + 0.5 * Math.sin(time * 2);
+    if (pt.type === 'lore') {
+      const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, 28);
+      grad.addColorStop(0, `rgba(255, 235, 120, ${0.22 + pulse * 0.12})`);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx - 28, sy - 28, 56, 56);
+      ctx.font = '28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('💡', sx, sy);
+    } else {
+      const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, 18);
+      grad.addColorStop(0, `rgba(255,215,0,${0.15 + pulse * 0.1})`);
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.fillRect(sx - 18, sy - 18, 36, 36);
+      ctx.font = `18px ${FONT_FANTASY}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pt.icon, sx, sy + 2);
+    }
   }
-  ctx.textAlign='left';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
 }
 
 function renderNPCs() {
@@ -1664,14 +1745,18 @@ function renderNPCs() {
       ctx.fillText(npc.name,sx+16,sy+3);
       ctx.textAlign='left';
     }
-    // Quest exclamation mark for NPCs with quests
+    // Quest marker sits at the character's feet so it doesn't clutter faces.
     if(hasQuestAvailable(npc.id)) {
-      const qy=sy-12+Math.sin(time*4)*3;
-      ctx.fillStyle='#ffd700';
-      ctx.font=`${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
-      ctx.textAlign='center';
-      ctx.fillText('?',sx+16,qy);
-      ctx.textAlign='left';
+      const qy = sy + 31 + Math.sin(time * 4) * 1.5;
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.24)';
+      ctx.beginPath();
+      ctx.ellipse(sx + 16, qy, 10, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(sx + 16, qy, 7, 3, 0, 0, Math.PI * 2);
+      ctx.stroke();
     }
   }
 }
@@ -1685,6 +1770,7 @@ function hasQuestAvailable(npcId) {
   if(npcId==='chitra' && !flags.metChitra) return true;
   if(npcId==='elder' && !flags.metElder) return true;
   if(npcId==='pippali' && !flags.metPippali) return true;
+  if(npcId==='pippali' && hasItem('mudga') && !flags.pippaliMudgaDone) return true;
   if(npcId==='makara' && !flags.metMakara) return true;
   return false;
 }
@@ -1785,7 +1871,8 @@ function renderInteractPrompt() {
   const nearby=getNearby();
   if(!nearby)return;
   let tx,ty,label;
-  if(nearby.type==='npc'){tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
+  if(nearby.type==='programmerStatues'){tx=programmerStatues.wang.x;ty=programmerStatues.wang.y;label=flags.seenProgrammers?'Programmer statues':'Move statues · press E';}
+  else if(nearby.type==='npc'){tx=nearby.target.x;ty=nearby.target.y;label=nearby.target.name;}
   else if(nearby.type==='item'){const it=ITEMS[nearby.target.itemId];tx=nearby.target.x;ty=nearby.target.y;label=it?it.name:'Item';}
   else if(nearby.type==='mother'){
     if (introActive) { tx=INTRO_LAYOUT.mother.x; ty=INTRO_LAYOUT.mother.y; label='Mother statue'; }
@@ -1848,6 +1935,263 @@ function roundRect(ctx,x,y,w,h,r) {
   ctx.closePath();
 }
 
+// ─── QUEST LOG ───
+const MATR_ROOT_IDS = ['matri', 'matrix', 'maternity', 'mammal'];
+
+function getEtymologyTrailProgress() {
+  const points = Object.entries(ETYMOLOGY_POINTS || {}).map(([pointId, data]) => {
+    const pt = INTERACT_POINTS.find(p => p.id === pointId);
+    return { pointId, ...data, point: pt };
+  }).filter(p => p.point);
+  const found = points.filter(p => flags[p.flag]).length;
+  const next = points.find(p => !flags[p.flag]);
+  return { found, total: points.length, next, complete: found >= points.length };
+}
+
+function getEvidenceQuestDetail() {
+  const progress = getEvidenceProgress({ flags });
+  if (progress.complete) return 'Full story · ISF Academy, year 2225';
+  const chapter = progress.found + 1;
+  return `${progress.found}/${progress.total} clues · Ch.${chapter}: ${progress.next.hint}`;
+}
+
+function getCrimsonQuestEntry(has) {
+  const color = '#dc143c';
+  if (has('krmija_dye')) return { label: 'Crimson dye', detail: 'Kṛmija collected', done: true, color };
+  if (!flags.metGuru) return { label: 'Crimson dye', detail: 'Await Guru\'s guidance', color };
+  if (!flags.metVrihi) return { label: 'Crimson dye', detail: 'Talk to Farmer Vrīhi · west', active: true, color };
+  if (has('khandah')) return { label: 'Crimson dye', detail: 'Bring khaṇḍa to Farmer Vrīhi', active: true, color };
+  if (has('bimba') && has('sarkara')) return { label: 'Crimson dye', detail: 'Cook khaṇḍa · farm kitchen', active: true, color };
+  return { label: 'Crimson dye', detail: 'Collect bimbā & śarkarā', active: true, color };
+}
+
+function getIndigoQuestEntry(has) {
+  const color = '#6a6aff';
+  if (has('nila_dye')) return { label: 'Indigo dye', detail: 'Nīla collected', done: true, color };
+  if (!flags.metGuru) return { label: 'Indigo dye', detail: 'Await Guru\'s guidance', color };
+  if (!flags.metBodhi) return { label: 'Indigo dye', detail: 'Talk to Monk Bodhi · north', active: true, color };
+  if (flags.offeringPlaced) return { label: 'Indigo dye', detail: 'Speak to Monk Bodhi', active: true, color };
+  if (has('offering')) return { label: 'Indigo dye', detail: 'Place offering · monastery altar', active: true, color };
+  if (has('vrihi') && has('srngavera') && has('pippali')) {
+    return { label: 'Indigo dye', detail: 'Cook offering · farm kitchen', active: true, color };
+  }
+  return { label: 'Indigo dye', detail: 'Collect vrīhi, śṛṅgavera & pippali', active: true, color };
+}
+
+function getOrangeQuestEntry(has) {
+  const color = '#ff8c00';
+  if (has('naranga_dye')) return { label: 'Orange dye', detail: 'Nāraṅga collected', done: true, color };
+  if (!flags.metGuru) return { label: 'Orange dye', detail: 'Await Guru\'s guidance', color };
+  if (!flags.metChitra) return { label: 'Orange dye', detail: 'Talk to Hunter Chitra · east', active: true, color };
+  if (has('naranga') && has('udumbara')) {
+    return { label: 'Orange dye', detail: 'Craft dye · village craft table', active: true, color };
+  }
+  return { label: 'Orange dye', detail: 'Collect nāraṅga & udumbara', active: true, color };
+}
+
+function getQuestLogEntries() {
+  const has = id => inventory.includes(id);
+  const dyeCount = [has('krmija_dye'), has('nila_dye'), has('naranga_dye')].filter(Boolean).length;
+  const allDyes = dyeCount === 3;
+  const matrFound = MATR_ROOT_IDS.filter(id => discoveredEtymology.has(id)).length;
+  const evidenceCount = EVIDENCE_SITES.filter(s => flags[s.flag]).length;
+  const etymTrail = getEtymologyTrailProgress();
+
+  const mainObjectives = [];
+  if (!flags.metGuru) {
+    mainObjectives.push({
+      label: 'The prophecy',
+      detail: 'Talk to Guru Varma · crossroads',
+      active: true,
+      color: '#ffd700',
+    });
+  }
+  mainObjectives.push(getCrimsonQuestEntry(has));
+  mainObjectives.push(getIndigoQuestEntry(has));
+  mainObjectives.push(getOrangeQuestEntry(has));
+  mainObjectives.push({
+    label: 'Awaken the Tri-Ratna',
+    detail: allDyes ? 'Climb Mount Sumeru · Elder Rājya' : 'Collect all three dyes first',
+    done: flags.gameComplete,
+    active: allDyes && !flags.gameComplete,
+    color: '#ffd700',
+  });
+
+  const sideQuests = [
+    {
+      label: 'Evidence Trail',
+      detail: getEvidenceQuestDetail(),
+      done: evidenceCount >= EVIDENCE_SITES.length,
+      active: evidenceCount < EVIDENCE_SITES.length,
+      optional: true,
+    },
+    {
+      label: 'Family Root Offering',
+      detail: flags.matrRootsOffered
+        ? 'Sprint unlocked · hold Shift'
+        : flags.spawnTutorialDone
+          ? `Submit to Mother statue · ${matrFound}/4 roots`
+          : 'Complete the family shrine first',
+      done: !!flags.matrRootsOffered,
+      active: flags.spawnTutorialDone && !flags.matrRootsOffered,
+      optional: true,
+    },
+    {
+      label: 'Pippali\'s Pantry',
+      detail: flags.pippaliMudgaDone
+        ? 'Mudga delivered'
+        : !flags.metPippali
+          ? 'Talk to Pippali · village market'
+          : has('mudga')
+            ? 'Bring mudga to Pippali'
+            : 'Find mudga beans · western fields',
+      done: !!flags.pippaliMudgaDone,
+      active: !flags.pippaliMudgaDone,
+      optional: true,
+    },
+    {
+      label: 'Makara\'s Lake Tale',
+      detail: !flags.metMakara
+        ? 'Talk to Fisher Makara · lake dock'
+        : flags.seenLakeMarker
+          ? 'Lake marker studied'
+          : 'Inspect Water Marker · lake shore',
+      done: !!(flags.metMakara && flags.seenLakeMarker),
+      active: !(flags.metMakara && flags.seenLakeMarker),
+      optional: true,
+    },
+    {
+      label: 'Etymology Markers',
+      detail: etymTrail.complete
+        ? 'All map markers studied'
+        : `${etymTrail.found}/${etymTrail.total} found · ${etymTrail.next.point.name}`,
+      done: etymTrail.complete,
+      active: !etymTrail.complete,
+      optional: true,
+    },
+  ];
+
+  return { dyeCount, mainObjectives, sideQuests };
+}
+
+function getNextQuestStep() {
+  if (!gameStarted || introActive || !flags.spawnTutorialDone || flags.gameComplete) return null;
+  const { mainObjectives } = getQuestLogEntries();
+  for (const entry of mainObjectives) {
+    if (entry.active && !entry.done) return entry.detail || entry.label;
+  }
+  return null;
+}
+
+function renderNextQuestStepPanel() {
+  const step = getNextQuestStep();
+  if (!step) return;
+
+  const pw = 248;
+  const px = 6;
+  const ph = 44;
+  const py = Math.round(canvas.height / 2 - ph / 2);
+  const padX = 8;
+  const innerW = pw - padX * 2;
+
+  ctx.fillStyle = 'rgba(10,10,30,0.82)';
+  roundRect(ctx, px, py, pw, ph, 4);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,215,0,0.35)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, px, py, pw, ph, 4);
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffd700';
+  ctx.font = `${FONT_FANTASY_BOLD} 10px ${FONT_FANTASY}`;
+  ctx.fillText('Main objective', px + padX, py + 14);
+
+  ctx.fillStyle = '#e8dcc0';
+  ctx.font = `9px ${FONT_FANTASY}`;
+  let detail = step;
+  while (detail.length > 3 && ctx.measureText(detail).width > innerW) detail = detail.slice(0, -4) + '…';
+  ctx.fillText(detail, px + padX, py + 30);
+}
+
+function drawQuestLogLine(qx, qyy, entry, maxW, compact) {
+  const prefix = entry.done ? '✓' : entry.active ? '›' : '○';
+  const color = entry.done ? '#7cb87c' : entry.active ? '#ffd700' : 'rgba(255,255,255,0.42)';
+  const title = entry.optional && !entry.done ? `${entry.label} (optional)` : entry.label;
+  const line = compact ? `${prefix} ${title}` : `${prefix} ${title}`;
+  ctx.fillStyle = color;
+  if (hasSanskritChars(line)) ctx.font = `9px ${FONT_FALLBACK}`;
+  else ctx.font = `9px ${FONT_FANTASY}`;
+  let text = line;
+  while (text.length > 3 && ctx.measureText(text).width > maxW) text = text.slice(0, -4) + '…';
+  ctx.fillText(text, qx, qyy);
+  if (!compact && entry.detail) {
+    if (entry.color && !entry.done) {
+      ctx.fillStyle = entry.active ? entry.color + 'cc' : entry.color + '55';
+      ctx.fillRect(qx - 4, qyy - 8, 2, 18);
+    }
+    ctx.fillStyle = entry.done ? 'rgba(120,180,120,0.55)' : entry.active ? 'rgba(255,215,0,0.55)' : 'rgba(255,255,255,0.28)';
+    ctx.font = `8px ${FONT_FANTASY}`;
+    let detail = entry.detail;
+    while (detail.length > 3 && ctx.measureText(detail).width > maxW - 6) detail = detail.slice(0, -4) + '…';
+    ctx.fillText(detail, qx + 8, qyy + 10);
+    return 20;
+  }
+  return compact ? 12 : 13;
+}
+
+function renderQuestPanel() {
+  if (!gameStarted || introActive || !flags.spawnTutorialDone || flags.gameComplete) return;
+
+  const { dyeCount, mainObjectives, sideQuests } = getQuestLogEntries();
+  const qw = 268;
+  const lineStart = 38;
+  const mainLines = mainObjectives.length * 20 + 22;
+  const sideLines = 14 + sideQuests.length * 20;
+  const qh = lineStart + mainLines + sideLines + 8;
+  const qx = canvas.width - qw - 6;
+  const qy = 26;
+
+  ctx.fillStyle = 'rgba(10,10,30,0.82)';
+  roundRect(ctx, qx, qy, qw, qh, 4);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,215,0,0.35)';
+  ctx.lineWidth = 1;
+  roundRect(ctx, qx, qy, qw, qh, 4);
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffd700';
+  ctx.font = `${FONT_FANTASY_BOLD} 11px ${FONT_FANTASY}`;
+  ctx.fillText('Quest Log', qx + 8, qy + 14);
+
+  let qyy = qy + lineStart;
+  ctx.fillStyle = '#e8c547';
+  ctx.font = `${FONT_FANTASY_BOLD} 10px ${FONT_FANTASY}`;
+  ctx.fillText('★ Main Quest', qx + 8, qyy);
+  qyy += 12;
+  ctx.fillStyle = dyeCount >= 3 ? '#7cb87c' : '#aaa';
+  ctx.font = `9px ${FONT_FANTASY}`;
+  ctx.fillText(`${dyeCount}/3 sacred dyes`, qx + 8, qyy);
+  qyy += 12;
+
+  const innerW = qw - 18;
+  for (const obj of mainObjectives) {
+    qyy += drawQuestLogLine(qx + 8, qyy, obj, innerW, false);
+  }
+
+  qyy += 6;
+  ctx.fillStyle = 'rgba(255,215,0,0.45)';
+  ctx.fillRect(qx + 8, qyy, qw - 16, 1);
+  qyy += 10;
+  ctx.fillStyle = '#ccc';
+  ctx.font = `${FONT_FANTASY_BOLD} 10px ${FONT_FANTASY}`;
+  ctx.fillText('Side Quests', qx + 8, qyy);
+  qyy += 14;
+
+  for (const quest of sideQuests) {
+    qyy += drawQuestLogLine(qx + 8, qyy, quest, innerW, false);
+  }
+}
+
 // ─── HUD ───
 function renderHUD() {
   // Top bar gradient
@@ -1889,6 +2233,7 @@ function renderHUD() {
     ctx.font=`${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
   }
   ctx.fillText(`📍 ${loc}`,12,19);
+  renderNextQuestStepPanel();
 
   // Dye progress — nice circles
   const dx=canvas.width-210;
@@ -1911,46 +2256,16 @@ function renderHUD() {
     }
   }
   ctx.fillStyle='#888';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText(`📖 ${discoveredWords.size}/${Object.keys(WORDS).length}`,dx+148,19);
-  ctx.fillStyle='#888';ctx.font='11px sans-serif';
-  ctx.fillText(`📜 ${discoveredEtymology.size}`,dx+228,19);
+  ctx.fillText(`📜 ${discoveredEtymology.size}/${getAllLoreIds().size}`,dx+148,19);
 
   // Bottom bar
   const bg=ctx.createLinearGradient(0,canvas.height-24,0,canvas.height);
   bg.addColorStop(0,'transparent');bg.addColorStop(1,'rgba(0,0,0,0.5)');
   ctx.fillStyle=bg;ctx.fillRect(0,canvas.height-24,canvas.width,24);
   ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText(getControlsHint(), 12, canvas.height - 7);
+  ctx.fillText(getControlsHint() + (flags.sprintUnlocked && !isMobileUI ? '  ·  Shift: Sprint' : ''), 12, canvas.height - 7);
 
-  // Quest panel
-  if(flags.metGuru&&!flags.gameComplete) {
-    const qw=180,qh=68,qx=canvas.width-qw-6,qy=26;
-    ctx.fillStyle='rgba(10,10,30,0.75)';
-    roundRect(ctx,qx,qy,qw,qh,4);ctx.fill();
-    ctx.strokeStyle='rgba(255,215,0,0.3)';ctx.lineWidth=1;
-    roundRect(ctx,qx,qy,qw,qh,4);ctx.stroke();
-    ctx.fillStyle='#ffd700';ctx.font=`${FONT_FANTASY_BOLD} 11px ${FONT_FANTASY}`;
-    ctx.fillText('⚔ Active Quests',qx+8,qy+14);
-    let qyy=qy+26;
-    const quests=[
-      {done:hasItem('krmija_dye'),name:'Kṛmija: Help Farmer Vrīhi',c:'#dc143c'},
-      {done:hasItem('nila_dye'),name:'Nīla: Offering for Monk Bodhi',c:'#6a6aff'},
-      {done:hasItem('naranga_dye'),name:'Nāraṅga: Explore the jungle',c:'#ff8c00'}
-    ];
-    for(const q of quests){
-      ctx.fillStyle=q.done?'#6a6':'rgba(255,255,255,0.5)';
-      const questText = q.done?`✓ ${q.name.split(':')[0]} dye obtained`:`○ ${q.name}`;
-      // Use fallback font if quest text contains Sanskrit characters
-      if(hasSanskritChars(questText)) {
-        ctx.font=`10px ${FONT_FALLBACK}`;
-      } else {
-        ctx.font=`10px ${FONT_FANTASY}`;
-      }
-      ctx.fillText(questText,qx+10,qyy);
-      if(!q.done){ctx.fillStyle=q.c+'60';ctx.fillRect(qx+4,qyy-8,3,10);}
-      qyy+=16;
-    }
-  }
+  renderQuestPanel();
 }
 
 function getLocationName(px,py) {
@@ -2130,177 +2445,363 @@ function drawRichText(ctx,raw,x,y,mw,lh,dc){
   ctx.font = baseFont; // Restore font at end
 }
 
-// ─── WORD POPUP ───
-function renderWordPopup() {
-  if(!wordPopup) return;
-  const w=wordPopup.word;
-  const slide=easeOutCubic(Math.min(1,wordPopup.slide));
-  const fadeOut=Math.min(1,wordPopup.timer*2);
-  const alpha=slide*fadeOut;
-
-  const pw=440,ph=80;
-  const px=canvas.width/2-pw/2;
-  const py=32+10*(1-slide);
-
-  ctx.globalAlpha=alpha;
-  // Glow behind
-  const grad=ctx.createLinearGradient(px,py,px+pw,py);
-  grad.addColorStop(0,'transparent');grad.addColorStop(0.1,'rgba(255,215,0,0.1)');
-  grad.addColorStop(0.9,'rgba(255,215,0,0.1)');grad.addColorStop(1,'transparent');
-  ctx.fillStyle=grad;ctx.fillRect(px-10,py-2,pw+20,ph+4);
-  // Box
-  ctx.fillStyle='rgba(12,12,30,0.94)';
-  roundRect(ctx,px,py,pw,ph,6);ctx.fill();
-  ctx.strokeStyle='#ffd700';ctx.lineWidth=1;
-  roundRect(ctx,px,py,pw,ph,6);ctx.stroke();
-  // Content
-  ctx.fillStyle='#ffd700';
-  // Sanskrit word uses fallback font
-  if(hasSanskritChars(w.s)) {
-    ctx.font=`600 14px ${FONT_FALLBACK}`;
-  } else {
-    ctx.font=`${FONT_FANTASY_BOLD} 14px ${FONT_FANTASY}`;
-  }
-  ctx.fillText(`✦ Word Discovered: ${w.s}`,px+14,py+22);
-  ctx.fillStyle='#4fc3f7';ctx.font=`12px ${FONT_FANTASY}`;
-  ctx.fillText(`→ English: "${w.en}"${w.zh?'  ·  Chinese: '+w.zh:''}`,px+14,py+42);
-  ctx.fillStyle='#aaa';ctx.font=`11px ${FONT_FANTASY}`;
-  const note=w.note.length>68?w.note.substring(0,68)+'…':w.note;
-  ctx.fillText(note,px+14,py+60);
-  ctx.globalAlpha=1;
-}
-
-// ─── INVENTORY PANEL ───
-function renderInventoryPanel() {
-  const pw=420,ph=360,px=(canvas.width-pw)/2,py=(canvas.height-ph)/2;
-  // Backdrop
-  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,canvas.width,canvas.height);
-  // Panel
-  ctx.fillStyle='rgba(12,12,30,0.96)';roundRect(ctx,px,py,pw,ph,6);ctx.fill();
-  ctx.strokeStyle='#ffd700';ctx.lineWidth=1;roundRect(ctx,px,py,pw,ph,6);ctx.stroke();
-  // Header
-  ctx.fillStyle='rgba(255,215,0,0.1)';ctx.fillRect(px+1,py+1,pw-2,36);
-  ctx.fillStyle='#ffd700';ctx.font=`${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
-  ctx.fillText('🎒 Inventory',px+16,py+25);
-  ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText('[I] close',px+pw-70,py+25);
-  if(inventory.length===0){
-    ctx.fillStyle='#555';ctx.font=`${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
-    ctx.fillText('Your pack is empty. Explore and collect items.',px+20,py+80);
-    return;
-  }
-  let iy=py+50;
-  for(const itemId of inventory){
-    const item=ITEMS[itemId];if(!item)continue;
-    // Item row bg
-    ctx.fillStyle='rgba(255,255,255,0.03)';
-    roundRect(ctx,px+8,iy-4,pw-16,28,3);ctx.fill();
-    // Color dot
-    ctx.fillStyle=item.color;
-    ctx.beginPath();ctx.arc(px+20,iy+8,4,0,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;
-    ctx.beginPath();ctx.arc(px+20,iy+8,5,0,Math.PI*2);ctx.stroke();
-    // Text
-    ctx.fillStyle='#e8e6e3';
-    // Use fallback font if item name contains Sanskrit characters
-    if(hasSanskritChars(item.name)) {
-      ctx.font=`600 13px ${FONT_FALLBACK}`;
-    } else {
-      ctx.font=`${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
-    }
-    ctx.fillText(item.name,px+32,iy+6);
-    ctx.fillStyle='#888';
-    // Use fallback font if item description contains Sanskrit characters
-    if(hasSanskritChars(item.desc)) {
-      ctx.font=`11px ${FONT_FALLBACK}`;
-    } else {
-      ctx.font=`11px ${FONT_FANTASY}`;
-    }
-    ctx.fillText(item.desc,px+32,iy+20);
-    iy+=36;
-  }
-}
-
-// ─── LEXICON PANEL ───
-function renderLexiconPanel() {
-  const pw=620,ph=460,px=(canvas.width-pw)/2,py=(canvas.height-ph)/2;
-  ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.fillStyle='rgba(12,12,30,0.96)';roundRect(ctx,px,py,pw,ph,6);ctx.fill();
-  ctx.strokeStyle='#ffd700';ctx.lineWidth=1;roundRect(ctx,px,py,pw,ph,6);ctx.stroke();
-  // Header
-  ctx.fillStyle='rgba(255,215,0,0.1)';ctx.fillRect(px+1,py+1,pw-2,28);
-  ctx.fillStyle='#ffd700';ctx.font=`${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
-  ctx.fillText(`📖 Lexicon (${discoveredWords.size}/${Object.keys(WORDS).length})`,px+16,py+25);
-  ctx.fillStyle='#666';ctx.font=`11px ${FONT_FANTASY}`;
-  ctx.fillText('[L] close',px+pw-70,py+25);
-  if(discoveredWords.size===0){
-    ctx.fillStyle='#555';ctx.font=`${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
-    ctx.fillText('No words discovered yet. Talk to people and explore.',px+20,py+80);
-    return;
-  }
-  let iy=py+40;const cols=2,colW=(pw-24)/cols;let col=0;
-  for(const wId of discoveredWords){
-    const w=WORDS[wId];if(!w)continue;
-    const cx=px+12+col*colW;
-    // Row bg
-    ctx.fillStyle='rgba(255,255,255,0.02)';
-    ctx.fillRect(cx-3,iy-10,colW-6,24);
-    ctx.fillStyle='#ffd700';
-    // Sanskrit word uses fallback font
-    if(hasSanskritChars(w.s)) {
-      ctx.font=`600 12px ${FONT_FALLBACK}`;
-    } else {
-      ctx.font=`${FONT_FANTASY_BOLD} 12px ${FONT_FANTASY}`;
-    }
-    ctx.fillText(w.s,cx,iy);
-    ctx.fillStyle='#4fc3f7';ctx.font=`11px ${FONT_FANTASY}`;
-    ctx.fillText(`→ ${w.en}${w.zh?' · '+w.zh:''}`,cx,iy+14);
-    col++;if(col>=cols){col=0;iy+=34;}
-  }
-}
-
-// ─── ETYMOLOGY BOOK PANEL ───
-function renderEtymologyBookPanel() {
-  const pw = 640, ph = 480, px = (canvas.width - pw) / 2, py = (canvas.height - ph) / 2;
+// ─── LORE TOAST (discovery popup, matches etymology book) ───
+function drawLorePanelChrome(px, py, pw, ph, title, hint) {
   ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = 'rgba(12,12,30,0.96)'; roundRect(ctx, px, py, pw, ph, 6); ctx.fill();
   ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1; roundRect(ctx, px, py, pw, ph, 6); ctx.stroke();
   ctx.fillStyle = 'rgba(255,215,0,0.1)'; ctx.fillRect(px + 1, py + 1, pw - 2, 28);
   ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 16px ${FONT_FANTASY}`;
-  ctx.fillText(`📜 Etymology Book (${discoveredEtymology.size}/${Object.keys(ETYMOLOGY_LORE).length})`, px + 16, py + 25);
+  ctx.fillText(title, px + 16, py + 25);
   ctx.fillStyle = '#666'; ctx.font = `11px ${FONT_FANTASY}`;
-  ctx.fillText('[B] close · ↑↓ scroll', px + pw - 130, py + 25);
+  ctx.fillText(hint, px + pw - Math.min(pw - 32, ctx.measureText(hint).width + 16), py + 25);
+}
 
-  if (discoveredEtymology.size === 0) {
+function drawLoreEntryCard(entry, px, py, pw, compact) {
+  const cardH = compact ? 72 : 80;
+  ctx.fillStyle = 'rgba(255,255,255,0.03)';
+  roundRect(ctx, px + 8, py, pw - 16, cardH, 4); ctx.fill();
+  ctx.fillStyle = '#888'; ctx.font = `10px ${FONT_FANTASY}`;
+  ctx.fillText(entry.theme || getLoreTheme(entry.id), px + 16, py + 14);
+  ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 14px ${FONT_FANTASY}`;
+  ctx.fillText(entry.title, px + 16, py + 32);
+  ctx.fillStyle = '#c9a227'; ctx.font = `600 11px ${FONT_FALLBACK}`;
+  ctx.fillText(`root: ${entry.root}`, px + 16, py + 48);
+  if (entry.english) {
+    ctx.fillStyle = '#4fc3f7'; ctx.font = `11px ${FONT_FANTASY}`;
+    ctx.fillText(`→ ${entry.english}${entry.zh ? ' · ' + entry.zh : ''}`, px + 16, py + 64);
+  } else if (!compact) {
+    ctx.fillStyle = '#bbb'; ctx.font = `11px ${FONT_FANTASY}`;
+    const preview = entry.text.length > 72 ? entry.text.slice(0, 69) + '…' : entry.text;
+    ctx.fillText(preview, px + 16, py + 64);
+  }
+  return cardH;
+}
+
+function renderLoreToast() {
+  if (!loreToast) return;
+  const slide = easeOutCubic(Math.min(1, loreToast.slide));
+  const fadeOut = Math.min(1, loreToast.timer * 2);
+  const alpha = slide * fadeOut;
+  const entry = loreToast.entry;
+  const pw = 480, ph = 118;
+  const px = canvas.width / 2 - pw / 2;
+  const py = 28 + 12 * (1 - slide);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const grad = ctx.createLinearGradient(px, py, px + pw, py);
+  grad.addColorStop(0, 'transparent'); grad.addColorStop(0.1, 'rgba(255,215,0,0.12)');
+  grad.addColorStop(0.9, 'rgba(255,215,0,0.12)'); grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad; ctx.fillRect(px - 10, py - 2, pw + 20, ph + 4);
+  ctx.fillStyle = 'rgba(12,12,30,0.94)'; roundRect(ctx, px, py, pw, ph, 6); ctx.fill();
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1; roundRect(ctx, px, py, pw, ph, 6); ctx.stroke();
+  ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
+  ctx.fillText('📜 Lore Discovered', px + 14, py + 20);
+  ctx.fillStyle = '#666'; ctx.font = `10px ${FONT_FANTASY}`;
+  ctx.fillText('Saved to Etymology Book · B', px + pw - 150, py + 20);
+  drawLoreEntryCard(entry, px, py + 24, pw, true);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function getInventorySections() {
+  const dyeIds = ['krmija_dye', 'nila_dye', 'naranga_dye'];
+  const craftedIds = ['khandah', 'offering'];
+  const counts = {};
+  for (const id of inventory) counts[id] = (counts[id] || 0) + 1;
+  const sections = [
+    { label: 'Sacred Dyes', ids: dyeIds.filter(id => counts[id]) },
+    { label: 'Crafted', ids: craftedIds.filter(id => counts[id]) },
+    { label: 'Materials', ids: Object.keys(counts).filter(id => !dyeIds.includes(id) && !craftedIds.includes(id)) },
+  ];
+  return sections.map(s => ({
+    ...s,
+    items: s.ids.map(id => ({ id, qty: counts[id], item: ITEMS[id] })).filter(x => x.item),
+  })).filter(s => s.items.length > 0);
+}
+
+// ─── INVENTORY PANEL ───
+function renderInventoryPanel() {
+  const pw = 460, ph = 420, px = (canvas.width - pw) / 2, py = (canvas.height - ph) / 2;
+  drawLorePanelChrome(px, py, pw, ph, '🎒 Inventory', '[I] close');
+  ctx.fillStyle = '#777'; ctx.font = `11px ${FONT_FANTASY}`;
+  ctx.fillText(`${inventory.length} item${inventory.length === 1 ? '' : 's'} carried`, px + 16, py + 42);
+
+  const sections = getInventorySections();
+  if (sections.length === 0) {
     ctx.fillStyle = '#555'; ctx.font = `${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
-    ctx.fillText('No stories yet. Press E on paintings and statues in the family hall.', px + 20, py + 80);
+    ctx.fillText('Your pack is empty. Explore and collect items.', px + 20, py + 90);
     return;
   }
 
-  const entries = [...discoveredEtymology].map(id => ETYMOLOGY_LORE[id]).filter(Boolean);
-  const rowH = 88;
-  const viewTop = py + 40;
-  const viewH = ph - 52;
-  const maxScroll = Math.max(0, entries.length * rowH - viewH);
-  etymologyBookScroll = Math.max(0, Math.min(etymologyBookScroll, Math.ceil(maxScroll / rowH)));
+  const viewTop = py + 52;
+  const viewH = ph - 64;
+  const flatRows = [];
+  for (const sec of sections) {
+    flatRows.push({ type: 'header', label: sec.label, h: 26 });
+    for (const row of sec.items) flatRows.push({ type: 'item', h: 48, ...row });
+  }
+  let totalH = 0;
+  for (const r of flatRows) totalH += r.h;
+  const maxScroll = Math.max(0, totalH - viewH);
+  let scrollPx = 0;
+  for (let i = 0; i < inventoryScroll && i < flatRows.length; i++) scrollPx += flatRows[i].h;
+  inventoryScroll = Math.max(0, Math.min(inventoryScroll, flatRows.length - 1));
 
   ctx.save();
   ctx.beginPath(); ctx.rect(px + 8, viewTop, pw - 16, viewH); ctx.clip();
-  let iy = viewTop - etymologyBookScroll * rowH;
-  for (const lore of entries) {
-    if (iy + rowH >= viewTop && iy <= viewTop + viewH) {
-      ctx.fillStyle = 'rgba(255,255,255,0.03)';
-      ctx.fillRect(px + 12, iy, pw - 24, rowH - 8);
-      ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 14px ${FONT_FANTASY}`;
-      ctx.fillText(lore.title, px + 20, iy + 18);
-      ctx.fillStyle = '#c9a227'; ctx.font = `600 11px ${FONT_FALLBACK}`;
-      ctx.fillText(`root: ${lore.root}`, px + 20, iy + 34);
-      ctx.fillStyle = '#bbb'; ctx.font = `12px ${FONT_FANTASY}`;
-      wrapText(lore.text, px + 20, iy + 50, pw - 48, 14, 3);
+  let iy = viewTop - scrollPx;
+  for (const row of flatRows) {
+    if (iy + row.h >= viewTop && iy <= viewTop + viewH) {
+      if (row.type === 'header') {
+        ctx.fillStyle = 'rgba(255,215,0,0.08)'; ctx.fillRect(px + 12, iy, pw - 24, row.h - 4);
+        ctx.fillStyle = '#c9a227'; ctx.font = `${FONT_FANTASY_BOLD} 11px ${FONT_FANTASY}`;
+        ctx.fillText(row.label, px + 18, iy + 15);
+      } else {
+        const item = row.item;
+        ctx.fillStyle = 'rgba(255,255,255,0.03)'; roundRect(ctx, px + 12, iy, pw - 24, row.h - 6, 4); ctx.fill();
+        drawItemEmoji(item, px + 28, iy + 18, 20, { glow: false, shadow: true });
+        ctx.fillStyle = '#e8e6e3';
+        ctx.font = hasSanskritChars(item.name) ? `600 13px ${FONT_FALLBACK}` : `${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
+        ctx.fillText(item.name + (row.qty > 1 ? ` ×${row.qty}` : ''), px + 46, iy + 16);
+        ctx.fillStyle = '#888';
+        ctx.font = hasSanskritChars(item.desc) ? `11px ${FONT_FALLBACK}` : `11px ${FONT_FANTASY}`;
+        ctx.fillText(item.desc, px + 46, iy + 32);
+      }
     }
-    iy += rowH;
+    iy += row.h;
   }
   ctx.restore();
+  if (totalH > viewH) {
+    ctx.fillStyle = '#555'; ctx.font = `10px ${FONT_FANTASY}`;
+    ctx.fillText('↑↓ scroll', px + pw - 58, py + ph - 10);
+  }
+}
+
+function buildEtymologyBookRows() {
+  const rows = [];
+  for (const theme of LORE_THEMES) {
+    const allIds = [...getAllLoreIds()].filter(id => getLoreTheme(id) === theme);
+    const found = allIds.filter(id => discoveredEtymology.has(id)).sort((a, b) => {
+      const ea = getLoreEntry(a), eb = getLoreEntry(b);
+      return (ea?.title || a).localeCompare(eb?.title || b);
+    });
+    rows.push({ type: 'header', theme, found: found.length, total: allIds.length });
+    if (found.length === 0) {
+      rows.push({ type: 'placeholder', theme });
+    } else {
+      for (const id of found) {
+        const entry = getLoreEntry(id);
+        if (entry) rows.push({ type: 'entry', entry });
+      }
+    }
+  }
+  return rows;
+}
+
+// ─── ETYMOLOGY BOOK PANEL ───
+function renderEtymologyBookPanel() {
+  const pw = 660, ph = 500, px = (canvas.width - pw) / 2, py = (canvas.height - ph) / 2;
+  const totalLore = getAllLoreIds().size;
+  drawLorePanelChrome(px, py, pw, ph,
+    `📜 Etymology Book (${discoveredEtymology.size}/${totalLore})`,
+    '[B] close · ↑↓ scroll');
+
+  if (discoveredEtymology.size === 0) {
+    ctx.fillStyle = '#555'; ctx.font = `${FONT_FANTASY_ITALIC} 14px ${FONT_FANTASY}`;
+    ctx.fillText('No lore yet. Talk to people, read paintings, and explore the world.', px + 20, py + 80);
+    return;
+  }
+
+  const rows = buildEtymologyBookRows();
+  const viewTop = py + 40;
+  const viewH = ph - 52;
+  let totalH = 0;
+  const heights = rows.map(r => r.type === 'header' ? 30 : r.type === 'placeholder' ? 24 : 92);
+  for (const h of heights) totalH += h;
+  const maxScroll = Math.max(0, totalH - viewH);
+  let scrollPx = 0;
+  for (let i = 0; i < etymologyBookScroll && i < rows.length; i++) scrollPx += heights[i];
+  etymologyBookScroll = Math.max(0, Math.min(etymologyBookScroll, rows.length - 1));
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(px + 8, viewTop, pw - 16, viewH); ctx.clip();
+  let iy = viewTop - scrollPx;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rh = heights[i];
+    if (iy + rh >= viewTop && iy <= viewTop + viewH) {
+      if (row.type === 'header') {
+        ctx.fillStyle = 'rgba(255,215,0,0.12)'; ctx.fillRect(px + 12, iy, pw - 24, rh - 4);
+        ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 12px ${FONT_FANTASY}`;
+        ctx.fillText(`${row.theme} (${row.found}/${row.total})`, px + 18, iy + 18);
+      } else if (row.type === 'placeholder') {
+        ctx.fillStyle = '#444'; ctx.font = `${FONT_FANTASY_ITALIC} 11px ${FONT_FANTASY}`;
+        ctx.fillText('— none discovered in this theme —', px + 24, iy + 16);
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(px + 12, iy, pw - 24, rh - 8);
+        ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 14px ${FONT_FANTASY}`;
+        ctx.fillText(row.entry.title, px + 20, iy + 18);
+        ctx.fillStyle = '#c9a227'; ctx.font = `600 11px ${FONT_FALLBACK}`;
+        ctx.fillText(`root: ${row.entry.root}`, px + 20, iy + 34);
+        if (row.entry.english) {
+          ctx.fillStyle = '#4fc3f7'; ctx.font = `11px ${FONT_FANTASY}`;
+          ctx.fillText(`→ ${row.entry.english}${row.entry.zh ? ' · ' + row.entry.zh : ''}`, px + 20, iy + 50);
+        }
+        ctx.fillStyle = '#bbb'; ctx.font = `12px ${FONT_FANTASY}`;
+        wrapText(row.entry.text, px + 20, iy + (row.entry.english ? 66 : 50), pw - 48, 14, 2);
+      }
+    }
+    iy += rh;
+  }
+  ctx.restore();
+}
+
+function getCraftPanelRows() {
+  if (!craftPanel) return [];
+  const rows = [];
+  for (const recipe of craftPanel.recipes) rows.push({ type: 'recipe', recipe });
+  for (const action of craftPanel.actions || []) rows.push({ type: 'action', action });
+  return rows;
+}
+
+function openCraftPanel(pt) {
+  const recipes = getRecipesForStation(pt.id);
+  const actions = [];
+  if (pt.id === 'monastery_altar' && hasItem('offering')) {
+    actions.push({
+      id: 'place_offering',
+      name: 'Place offering on altar',
+      desc: 'Leave the fragrant dish for the monks.',
+      ready: true,
+    });
+  }
+  craftPanel = {
+    id: pt.id,
+    name: pt.name,
+    icon: pt.icon,
+    selected: 0,
+    recipes,
+    actions,
+  };
+  showInventory = false;
+  showEtymologyBook = false;
+}
+
+function drawIngredientRow(ingredientId, x, y, maxW) {
+  const item = ITEMS[ingredientId];
+  const have = hasItem(ingredientId);
+  ctx.fillStyle = have ? '#6fcf97' : '#e07070';
+  ctx.font = `12px ${FONT_FANTASY}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(have ? '✓' : '○', x, y);
+  if (item) drawItemEmoji(item, x + 22, y - 2, 16, { glow: false, shadow: false });
+  ctx.fillStyle = have ? '#e8e6e3' : '#888';
+  ctx.font = hasSanskritChars(item?.name) ? `600 12px ${FONT_FALLBACK}` : `12px ${FONT_FANTASY}`;
+  const label = item ? item.name : ingredientId;
+  ctx.fillText(label, x + 38, y);
+  return have;
+}
+
+function renderCraftPanel() {
+  if (!craftPanel) return;
+  const rows = getCraftPanelRows();
+  const pw = 520;
+  const ph = Math.min(440, 120 + Math.max(1, rows.length) * 108);
+  const px = (canvas.width - pw) / 2, py = (canvas.height - ph) / 2;
+  drawLorePanelChrome(px, py, pw, ph, `${craftPanel.icon} ${craftPanel.name}`, '[Esc] close · ↑↓ · E craft');
+
+  if (rows.length === 0) {
+    ctx.fillStyle = '#555'; ctx.font = `${FONT_FANTASY_ITALIC} 13px ${FONT_FANTASY}`;
+    if (craftPanel.id === 'monastery_altar') {
+      ctx.fillText('Cook a monastery offering at the Farm Kitchen, then return.', px + 20, py + 70);
+      const offeringRecipe = RECIPES.find(r => r.output === 'offering');
+      if (offeringRecipe) {
+        let ingY = py + 96;
+        ctx.fillStyle = '#888'; ctx.font = `${FONT_FANTASY_BOLD} 11px ${FONT_FANTASY}`;
+        ctx.fillText('Required ingredients:', px + 22, ingY);
+        ingY += 18;
+        for (const ing of offeringRecipe.inputs) drawIngredientRow(ing, px + 22, ingY, 120), ingY += 20;
+      }
+    } else {
+      ctx.fillText('Nothing to craft here right now.', px + 20, py + 70);
+    }
+    return;
+  }
+
+  craftPanel.selected = Math.max(0, Math.min(craftPanel.selected, rows.length - 1));
+  let iy = py + 44;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const selected = i === craftPanel.selected;
+    const blockH = row.type === 'action' ? 72 : 98;
+    ctx.fillStyle = selected ? 'rgba(255,215,0,0.12)' : 'rgba(255,255,255,0.03)';
+    roundRect(ctx, px + 12, iy, pw - 24, blockH, 4); ctx.fill();
+    if (selected) {
+      ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1;
+      roundRect(ctx, px + 12, iy, pw - 24, blockH, 4); ctx.stroke();
+    }
+
+    if (row.type === 'recipe') {
+      const recipe = row.recipe;
+      const out = ITEMS[recipe.output];
+      const ready = recipeHasIngredients(recipe, hasItem);
+      ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
+      ctx.fillText(recipe.name, px + 22, iy + 18);
+      ctx.fillStyle = ready ? '#6fcf97' : '#888'; ctx.font = `10px ${FONT_FANTASY}`;
+      ctx.fillText(ready ? 'Ready to craft' : 'Missing ingredients', px + pw - 130, iy + 18);
+      if (out) {
+        drawItemEmoji(out, px + 30, iy + 34, 18, { glow: true, shadow: true });
+        ctx.fillStyle = '#bbb'; ctx.font = `11px ${FONT_FANTASY}`;
+        ctx.textAlign = 'left';
+        ctx.fillText(`→ ${out.name}`, px + 46, iy + 38);
+      }
+      let ix = px + 22, ingY = iy + 56;
+      for (const ing of recipe.inputs) {
+        drawIngredientRow(ing, ix, ingY, 120);
+        ix += 118;
+      }
+    } else {
+      const action = row.action;
+      ctx.fillStyle = '#ffd700'; ctx.font = `${FONT_FANTASY_BOLD} 13px ${FONT_FANTASY}`;
+      ctx.fillText(action.name, px + 22, iy + 22);
+      ctx.fillStyle = '#bbb'; ctx.font = `11px ${FONT_FANTASY}`;
+      ctx.fillText(action.desc, px + 22, iy + 42);
+      ctx.fillStyle = '#6fcf97'; ctx.font = `10px ${FONT_FANTASY}`;
+      ctx.fillText('Ready · press E', px + 22, iy + 58);
+    }
+    iy += blockH + 8;
+  }
+}
+
+function executeRecipe(recipe) {
+  if (!recipeHasIngredients(recipe, hasItem)) return false;
+  for (const t of recipe.take || recipe.inputs) {
+    const idx = inventory.indexOf(t);
+    if (idx >= 0) inventory.splice(idx, 1);
+  }
+  if (!inventory.includes(recipe.output)) inventory.push(recipe.output);
+  if (recipe.output.includes('_dye')) {
+    screenFlash = { alpha: 0.6, color: ITEMS[recipe.output]?.color || '#ffd700' };
+    cameraShake.intensity = 8;
+  }
+  startDialogue({ lines: [recipe.msg], words: [], give: [], take: [], setFlags: [] });
+  craftPanel = null;
+  return true;
+}
+
+function tryCraftFromPanel() {
+  if (!craftPanel) return;
+  const rows = getCraftPanelRows();
+  const row = rows[craftPanel.selected];
+  if (!row) return;
+  if (row.type === 'recipe') {
+    if (recipeHasIngredients(row.recipe, hasItem)) executeRecipe(row.recipe);
+  } else if (row.type === 'action' && row.action.id === 'place_offering') {
+    craftPanel = null;
+    startDialogue(getPointDialogue('monastery_altar', stateObj()));
+  }
 }
 
 function wrapText(text, x, y, maxW, lineH, maxLines) {
@@ -2329,8 +2830,7 @@ function tryHallPaintingInteract(id) {
   if (quizState || introMsg || isStatueSliding()) return;
   const lore = ETYMOLOGY_LORE[id];
   if (!lore) return;
-  const firstTime = !discoveredEtymology.has(id);
-  discoverEtymology(id);
+  const firstTime = discoverLore(id, { silent: true });
   showIntroMessage(
     lore.text,
     firstTime ? () => showIntroMessage('Saved to your Etymology Book. Press B to read it anytime.') : null,
@@ -2439,6 +2939,322 @@ function getHallPaintingNearby(maxDist) {
     }
   }
   return best;
+}
+
+// ─── PROGRAMMER STATUES (Evidence Clue II) ───
+function refreshProgrammerTracks() {
+  // Programmer tracks live on mainMap only; `map` may be [] or the intro map before main world loads.
+  if (!mainMap) return;
+  const targetMap = mainMap;
+  if (flags.seenProgrammers) {
+    clearProgrammerTrackTiles(targetMap);
+    return;
+  }
+  const showWang = !programmerStatues || !programmerStatues.wang.placed;
+  const showLi = !programmerStatues || !programmerStatues.li.placed;
+  repaintProgrammerTracks(targetMap, showWang, showLi);
+}
+
+function initProgrammerStatues() {
+  const W = PROGRAMMER_SHRINE.wang, L = PROGRAMMER_SHRINE.li;
+  if (flags.seenProgrammers) {
+    programmerStatues = {
+      activated: true,
+      wang: { x: W.targetX, y: W.targetY, sliding: false, placed: true, path: null, pathIdx: 0, segT: 0 },
+      li: { x: L.targetX, y: L.targetY, sliding: false, placed: true, path: null, pathIdx: 0, segT: 0 },
+    };
+    return;
+  }
+  programmerStatues = {
+    activated: false,
+    wang: { x: W.homeX, y: W.homeY, sliding: false, placed: false, path: null, pathIdx: 0, segT: 0 },
+    li: { x: L.homeX, y: L.homeY, sliding: false, placed: false, path: null, pathIdx: 0, segT: 0 },
+  };
+}
+
+function isProgrammerSliding() {
+  return programmerStatues && (programmerStatues.wang.sliding || programmerStatues.li.sliding);
+}
+
+function programmerStatueBlocks(tx, ty) {
+  if (!programmerStatues || introActive) return false;
+  const onTile = (s) => Math.floor(s.x) === tx && Math.floor(s.y) === ty;
+  if (onTile(programmerStatues.wang)) return true;
+  if (onTile(programmerStatues.li)) return true;
+  return false;
+}
+
+function getProgrammerNearby() {
+  if (!programmerStatues || introActive || !flags.spawnTutorialDone) return null;
+  const w = programmerStatues.wang, l = programmerStatues.li;
+  if (dist(player.x, player.y, w.x, w.y) < 1.9 || dist(player.x, player.y, l.x, l.y) < 1.9) {
+    return { type: 'programmerStatues', target: null };
+  }
+  return null;
+}
+
+function tryProgrammerStatueInteract() {
+  if (quizState || introMsg || isProgrammerSliding()) return;
+  if (flags.seenProgrammers) {
+    showIntroMessage(
+      'E. Wang and X. Li — ISF Academy Digital Humanities Lab.\n{d}They built MANTRA to show Sanskrit roots in English.\nThey made it too immersive.{/}',
+    );
+    return;
+  }
+  if (programmerStatues.activated) return;
+  programmerStatues.activated = true;
+  slideProgrammerStatue('wang');
+  slideProgrammerStatue('li');
+  showIntroMessage('The stone figures grind alive — both sliding along the tracks toward the Digital Humanities Lab…');
+}
+
+function slideProgrammerStatue(which) {
+  const s = programmerStatues[which];
+  const cfg = PROGRAMMER_SHRINE[which];
+  if (s.sliding || s.placed) return;
+  s.sliding = true;
+  s.path = cfg.path.map(p => ({ x: p.x, y: p.y }));
+  s.pathIdx = 1;
+  s.segT = 0;
+}
+
+function onProgrammerStatueArrived(which) {
+  const s = programmerStatues[which];
+  s.sliding = false;
+  s.path = null;
+  s.placed = true;
+  refreshProgrammerTracks();
+  if (programmerStatues.wang.placed && programmerStatues.li.placed && !flags.seenProgrammers) {
+    flags.seenProgrammers = true;
+    screenFlash = { alpha: 0.25, color: '#ffd700' };
+    const dlg = getProgrammerClueDialogue();
+    dlg.setFlags = [];
+    dlg.speaker = 'MANTRA Archive';
+    dlg.speakerColor = '#4fc3f7';
+    startDialogue(dlg);
+  }
+}
+
+function updateProgrammerStatues(dt) {
+  if (!programmerStatues || introActive) return;
+  for (const which of ['wang', 'li']) {
+    const s = programmerStatues[which];
+    if (!s.sliding || !s.path || s.pathIdx >= s.path.length) continue;
+    const from = s.path[s.pathIdx - 1];
+    const to = s.path[s.pathIdx];
+    const segLen = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
+    if (segLen < 0.01) {
+      s.pathIdx++;
+      s.segT = 0;
+      continue;
+    }
+    s.segT += STATUE_TRACK_SPEED * dt / segLen;
+    const t = Math.min(1, s.segT);
+    s.x = from.x + (to.x - from.x) * t;
+    s.y = from.y + (to.y - from.y) * t;
+    if (t >= 1) {
+      s.x = to.x;
+      s.y = to.y;
+      s.pathIdx++;
+      s.segT = 0;
+      if (s.pathIdx >= s.path.length) onProgrammerStatueArrived(which);
+    }
+  }
+}
+
+function renderProgrammerDestinationMarks() {
+  if (!programmerStatues || introActive || !flags.spawnTutorialDone || flags.seenProgrammers) return;
+  if (programmerStatues.wang.placed && programmerStatues.li.placed) return;
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  const drawMark = (tx, ty, done) => {
+    const sx = tx * TILE_SIZE + TILE_SIZE / 2 - camX;
+    const sy = ty * TILE_SIZE + TILE_SIZE / 2 - camY;
+    const pulse = 0.25 + 0.2 * Math.sin(time * 3 + tx);
+    ctx.fillStyle = done ? 'rgba(255,215,0,0.12)' : `rgba(255,215,0,${pulse * 0.35})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = done ? '#886622' : '#ffd700';
+    ctx.lineWidth = done ? 1 : 2;
+    ctx.stroke();
+    if (!done) {
+      ctx.fillStyle = `rgba(255,215,0,${0.5 + pulse * 0.3})`;
+      ctx.font = `11px ${FONT_FANTASY}`;
+      ctx.textAlign = 'center';
+      ctx.fillText('◎', sx, sy + 4);
+      ctx.textAlign = 'left';
+    }
+  };
+  if (!programmerStatues.wang.placed) drawMark(PROGRAMMER_SHRINE.wangMark.x, PROGRAMMER_SHRINE.wangMark.y, false);
+  if (!programmerStatues.li.placed) drawMark(PROGRAMMER_SHRINE.liMark.x, PROGRAMMER_SHRINE.liMark.y, false);
+}
+
+function renderProgrammerStatues() {
+  if (!programmerStatues || introActive || !flags.spawnTutorialDone) return;
+  renderProgrammerDestinationMarks();
+  const w = programmerStatues.wang, l = programmerStatues.li;
+  drawShrineStatue('wang', w.x, w.y, w.placed || flags.seenProgrammers, PROGRAMMER_SHRINE.wang.name);
+  drawShrineStatue('li', l.x, l.y, l.placed || flags.seenProgrammers, PROGRAMMER_SHRINE.li.name);
+}
+
+// ─── QUEST GUIDE ARROW ───
+function guidePosForItem(itemId) {
+  const gi = GROUND_ITEMS.find(g => g.itemId === itemId);
+  return gi ? { x: gi.x, y: gi.y } : null;
+}
+
+function guidePosForPoint(pointId) {
+  const pt = INTERACT_POINTS.find(p => p.id === pointId);
+  return pt ? { x: pt.x, y: pt.y } : null;
+}
+
+function getQuestGuideTarget() {
+  if (!flags.spawnTutorialDone || introActive || flags.gameComplete) return null;
+  const has = id => inventory.includes(id);
+
+  if (!flags.metGuru) return { x: 40, y: 30, stage: 'guru' };
+
+  if (!has('krmija_dye')) {
+    if (!flags.metVrihi) return { x: 16, y: 30, stage: 'vrihi' };
+    if (!has('bimba')) return { ...guidePosForItem('bimba'), stage: 'crimson_bimba' };
+    if (!has('sarkara')) return { ...guidePosForItem('sarkara'), stage: 'crimson_sarkara' };
+    if (!has('khandah')) return { ...guidePosForPoint('farm_kitchen'), stage: 'crimson_kitchen' };
+    return { x: 16, y: 30, stage: 'crimson_vrihi' };
+  }
+
+  if (!has('nila_dye')) {
+    if (!flags.metBodhi) return { x: 42, y: 12, stage: 'bodhi' };
+    if (!has('vrihi')) return { ...guidePosForItem('vrihi'), stage: 'indigo_vrihi' };
+    if (!has('srngavera')) return { ...guidePosForItem('srngavera'), stage: 'indigo_srngavera' };
+    if (!has('pippali')) return { ...guidePosForItem('pippali'), stage: 'indigo_pippali' };
+    if (!has('offering')) return { ...guidePosForPoint('farm_kitchen'), stage: 'indigo_kitchen' };
+    if (!flags.offeringPlaced) return { ...guidePosForPoint('monastery_altar'), stage: 'indigo_altar' };
+    return { x: 42, y: 12, stage: 'indigo_bodhi' };
+  }
+
+  if (!has('naranga_dye')) {
+    if (!flags.metChitra) return { x: 58, y: 30, stage: 'chitra' };
+    if (!has('naranga')) return { ...guidePosForItem('naranga'), stage: 'orange_naranga' };
+    if (!has('udumbara')) return { ...guidePosForItem('udumbara'), stage: 'orange_udumbara' };
+    return { ...guidePosForPoint('craft_table'), stage: 'orange_craft' };
+  }
+
+  if (!flags.gameComplete) return { x: 41, y: 3, stage: 'triratna' };
+  return null;
+}
+
+function getCachedQuestGuideTarget() {
+  const target = getQuestGuideTarget();
+  const key = target ? target.stage : '';
+  if (!key) {
+    questGuidePath = null;
+    questGuidePathKey = '';
+    return null;
+  }
+  if (key !== questGuidePathKey) {
+    questGuidePathKey = key;
+    questGuidePath = target;
+  }
+  return questGuidePath;
+}
+
+function getQuestTargetScreenPosition(target) {
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return null;
+  const wx = (target.x + 0.5) * TILE_SIZE;
+  const wy = (target.y + 0.5) * TILE_SIZE;
+  const camX = renderInWorldSpace ? 0 : camera.x;
+  const camY = renderInWorldSpace ? 0 : camera.y;
+  return { x: wx - camX, y: wy - camY };
+}
+
+function renderQuestGuideTargetMarker() {
+  if (dialogueState || craftPanel || showInventory || showEtymologyBook) return;
+  const target = getCachedQuestGuideTarget();
+  const pos = getQuestTargetScreenPosition(target);
+  if (!pos) return;
+  if (pos.x < -20 || pos.x > canvas.width + 20 || pos.y < -20 || pos.y > canvas.height + 20) return;
+  const pulse = 0.55 + 0.25 * Math.sin(time * 3);
+  ctx.save();
+  const markerY = pos.y + 18;
+  ctx.fillStyle = `rgba(255, 215, 0, ${0.16 + pulse * 0.1})`;
+  ctx.beginPath();
+  ctx.ellipse(pos.x, markerY, 16 + pulse * 3, 6 + pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = `rgba(255, 215, 0, ${0.6 + pulse * 0.3})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(pos.x, markerY, 10, 4, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderQuestGuideArrow() {
+  if (dialogueState || craftPanel || showInventory || showEtymologyBook) return;
+  const target = getCachedQuestGuideTarget();
+  if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
+
+  const targetScreen = getQuestTargetScreenPosition(target);
+  if (!targetScreen) return;
+
+  const playerScreen = {
+    x: player.x * TILE_SIZE + TILE_SIZE / 2 - camera.x,
+    y: player.y * TILE_SIZE + TILE_SIZE / 2 - camera.y,
+  };
+  const dx = targetScreen.x - playerScreen.x;
+  const dy = targetScreen.y - playerScreen.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 24) return;
+
+  const margin = isMobileUI ? 86 : 34;
+  const left = margin;
+  const right = canvas.width - margin;
+  const top = margin;
+  const bottom = canvas.height - margin;
+  const onscreen = targetScreen.x >= left && targetScreen.x <= right && targetScreen.y >= top && targetScreen.y <= bottom;
+  if (onscreen) return;
+
+  const centerX = canvas.width / 2;
+  const centerY = canvas.height / 2;
+  const angle = Math.atan2(dy, dx);
+  const vx = Math.cos(angle);
+  const vy = Math.sin(angle);
+  const tx = vx > 0 ? (right - centerX) / vx : vx < 0 ? (left - centerX) / vx : Infinity;
+  const ty = vy > 0 ? (bottom - centerY) / vy : vy < 0 ? (top - centerY) / vy : Infinity;
+  const t = Math.min(Math.abs(tx), Math.abs(ty));
+  const ax = centerX + vx * t;
+  const ay = centerY + vy * t;
+
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.rotate(angle);
+  const pulse = 0.85 + 0.15 * Math.sin(time * 4);
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.beginPath();
+  ctx.arc(0, 0, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.7)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = '#ffd700';
+  ctx.globalAlpha = pulse;
+  ctx.beginPath();
+  ctx.moveTo(14, 0);
+  ctx.lineTo(-8, -10);
+  ctx.lineTo(-4, 0);
+  ctx.lineTo(-8, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.rotate(-angle);
+  ctx.fillStyle = '#e8dcc0';
+  ctx.font = `8px ${FONT_FANTASY}`;
+  ctx.textAlign = 'center';
+  ctx.fillText('Quest', 0, 34);
+  ctx.restore();
 }
 
 function getSpawnNearby() {
@@ -2634,6 +3450,25 @@ function renderHallDestinationMarks() {
 function trySpawnMotherInteract() {
   if (quizState) return;
   if (flags.spawnMotherDone) {
+    if (flags.spawnTutorialDone && !flags.matrRootsOffered) {
+      const matrFound = MATR_ROOT_IDS.filter(id => discoveredEtymology.has(id));
+      if (matrFound.length >= MATR_ROOT_IDS.length) {
+        flags.matrRootsOffered = true;
+        flags.sprintUnlocked = true;
+        showIntroChain([
+          'You whisper the matr- roots to the Mother statue — mātṛ, matrix, maternity, mammal.',
+          'The stone warms. Lines of Sanskrit pulse beneath the surface, then settle into your bones.',
+          'You feel lighter on your feet. Hold Shift to sprint in any direction.',
+        ]);
+        screenFlash = { alpha: 0.3, color: '#ffd700' };
+        return;
+      }
+      showIntroMessage(
+        `The Mother statue waits for matr- roots (${matrFound.length}/${MATR_ROOT_IDS.length}).\n` +
+        'Discover matri, matrix, maternity, and mammal — then return to offer them here.',
+      );
+      return;
+    }
     showIntroMessage(MOTHER_QUIZ.etym);
     return;
   }
@@ -2698,14 +3533,14 @@ function unlockFamilyHall() {
   showIntroChain([
     FATHER_QUIZ.etym,
     'The outer seal shatters.',
-    'Walk south into Siṃhapura — find Guru Vidya at the village crossroads.',
+    'Walk south into Siṃhapura — find Guru Varma at the village crossroads.',
   ], () => {
     flags.spawnTutorialDone = true;
     spawnTutorial.step = 'done';
     snapCameraToTarget();
     startDialogue({
       lines: [
-        'You step into the open air. The village crossroads lie ahead.\n{d}Find {g}Guru Vidya{/} at the center of Siṃhapura — the one called the "heavy one," heavy with knowing.{/}',
+        'You step into the open air. The village crossroads lie ahead.\n{d}Find {g}Guru Varma{/} at the center of Siṃhapura — the one called the "heavy one," heavy with knowing.{/}',
       ],
       speaker: 'The Resonant World',
       speakerColor: '#ffd700',
@@ -2962,7 +3797,7 @@ function completeIntro() {
       'The stone door grinds open. {w}Sunlight{/} — real sunlight — spills across the threshold.',
       'You step into {g}Siṃhapura{/}. The village hums with voices, spice, and memory.',
       '{d}The words of kin still echo in the chamber behind you.\nNow the wider world awaits.{/}',
-      'Find {g}Guru Vidya{/} in the village square. The journey to restore the {w}Tri-Ratna{/} begins here.',
+      'Find {g}Guru Varma{/} in the village square. The journey to restore the {w}Tri-Ratna{/} begins here.',
     ],
     words: [],
     give: [],

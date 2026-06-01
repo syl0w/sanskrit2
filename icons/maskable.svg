@@ -1,8 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MANTRA maskable app icon">
-  <rect width="512" height="512" fill="#0a0a1a"/>
-  <circle cx="256" cy="256" r="196" fill="#151533"/>
-  <circle cx="256" cy="256" r="176" fill="none" stroke="#d4af37" stroke-width="18"/>
-  <path d="M256 88 366 256 256 424 146 256Z" fill="#d4af37"/>
-  <circle cx="256" cy="256" r="76" fill="#0a0a1a"/>
-  <text x="256" y="284" text-anchor="middle" font-family="serif" font-size="82" font-weight="700" fill="#f5e6c8">.</text>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+      <stop offset="0%" stop-color="#25255a"/>
+      <stop offset="64%" stop-color="#11112b"/>
+      <stop offset="100%" stop-color="#070714"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="116" y1="60" x2="396" y2="452">
+      <stop offset="0%" stop-color="#fff4b8"/>
+      <stop offset="45%" stop-color="#d4af37"/>
+      <stop offset="100%" stop-color="#806010"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- Keep important artwork inside the maskable safe zone. -->
+  <circle cx="256" cy="256" r="188" fill="#10102a" stroke="url(#gold)" stroke-width="18"/>
+  <circle cx="256" cy="256" r="145" fill="none" stroke="#f5e6c8" stroke-width="4" opacity="0.5"/>
+
+  <g stroke="url(#gold)" stroke-width="9" stroke-linecap="round">
+    <path d="M256 104v60"/>
+    <path d="M256 348v60"/>
+    <path d="M104 256h60"/>
+    <path d="M348 256h60"/>
+    <path d="M148 148l42 42"/>
+    <path d="M322 322l42 42"/>
+    <path d="M364 148l-42 42"/>
+    <path d="M190 322l-42 42"/>
+  </g>
+
+  <g fill="none" stroke="#f5e6c8" stroke-width="5" opacity="0.9">
+    <path d="M256 120 326 256 256 392 186 256Z"/>
+    <path d="M120 256 256 186 392 256 256 326Z"/>
+  </g>
+
+  <circle cx="256" cy="256" r="82" fill="#0a0a1a" stroke="url(#gold)" stroke-width="11"/>
+  <circle cx="256" cy="256" r="42" fill="none" stroke="#f5e6c8" stroke-width="5"/>
+  <circle cx="256" cy="256" r="12" fill="#ffd700"/>
+
+  <g fill="#ffd700">
+    <circle cx="256" cy="112" r="8"/>
+    <circle cx="256" cy="400" r="8"/>
+    <circle cx="112" cy="256" r="8"/>
+    <circle cx="400" cy="256" r="8"/>
+    <circle cx="155" cy="155" r="6"/>
+    <circle cx="357" cy="155" r="6"/>
+    <circle cx="357" cy="357" r="6"/>
+    <circle cx="155" cy="357" r="6"/>
+  </g>
+
+  <text x="256" y="286" text-anchor="middle" font-family="Georgia, serif" font-size="76" font-weight="700" fill="#f5e6c8">M</text>
 </svg>

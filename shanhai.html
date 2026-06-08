@@ -169,7 +169,7 @@
     #fusang-lore { background: rgba(28, 24, 16, 0.94); border: 1px solid rgba(255, 200, 100, 0.45); color: #f0e8d0; }
     #jingwei-lore, #beishan-lore { background: rgba(22, 26, 32, 0.94); border: 1px solid rgba(140, 180, 220, 0.45); color: #dce8f4; }
     #qingqiu-lore { background: rgba(24, 20, 28, 0.94); border: 1px solid rgba(200, 160, 220, 0.45); color: #ece4f4; top: 400px; }
-    #kunlun-lore { background: rgba(20, 22, 32, 0.94); border: 1px solid rgba(180, 200, 240, 0.45); color: #e0e8f8; top: 460px; }
+    #kunlun-lore { background: rgba(20, 22, 32, 0.94); border: 1px solid rgba(180, 200, 240, 0.45); color: #e0e8f8; }
     #fusang-lore.show, #jingwei-lore.show, #beishan-lore.show, #qingqiu-lore.show, #kunlun-lore.show {
       opacity: 1; transform: translateX(0); pointer-events: auto;
     }
@@ -710,6 +710,16 @@
     return h;
   }
 
+  function kunlunRingLandHeight(x, z) {
+    const cdist = Math.hypot(x - WORLD_CENTER, z - WORLD_CENTER);
+    const span = OUTER_RING_OUT - OUTER_RING_IN + 30;
+    const u = clamp((cdist - (OUTER_RING_IN - 20)) / span, 0, 1);
+    const coast = WATER_LEVEL + 0.15 + u * u * 8.5 + fbm(x * 0.02, z * 0.02, 3) * (0.8 + u * 1.4);
+    const eastBias = smoothstep(KUNLUN.cx - 40, KUNLUN.cx + 48, x);
+    const eastFloor = WATER_LEVEL + 2.85 + fbm(x * 0.06, z * 0.06, 2) * 0.5;
+    return Math.max(coast, lerp(coast, eastFloor, eastBias * 0.95));
+  }
+
   function applyKunlunTerrain(x, z, h) {
     const mask = kunlunMask(x, z);
     if (mask <= 0) return h;
@@ -733,7 +743,18 @@
       h = lerp(h, target, cut);
     }
 
+    if (d > KUNLUN.weakWaterOuter && d < KUNLUN.fireRingInner) {
+      const shelf = 1 - smoothstep(KUNLUN.weakWaterOuter, KUNLUN.fireRingInner, d);
+      const landH = kunlunRingLandHeight(x, z) + 0.25 + fbm(x * 0.14, z * 0.14, 2) * 0.3;
+      h = lerp(h, landH, shelf * 0.88 * mask);
+    }
+
     if (d >= KUNLUN.fireRingInner && d <= KUNLUN.fireRingOuter) {
+      const landH = kunlunRingLandHeight(x, z) + 0.4 + fbm(x * 0.1, z * 0.1, 2) * 0.28;
+      const plate = smoothstep(KUNLUN.fireRingInner, KUNLUN.fireRingInner + 7, d)
+        * (1 - smoothstep(KUNLUN.fireRingOuter - 5, KUNLUN.fireRingOuter, d));
+      h = lerp(h, landH, plate * 0.95 * mask);
+
       const fireAng = Math.atan2(z - KUNLUN.cz, x - KUNLUN.cx);
       const mid = (KUNLUN.fireRingInner + KUNLUN.fireRingOuter) * 0.5;
       const fireBump = Math.exp(-((d - mid) ** 2) / 48)
@@ -741,6 +762,18 @@
       h += fireBump * 8 * mask;
       if (d > KUNLUN.fireRingInner + 3 && d < KUNLUN.fireRingOuter - 4) {
         h += fbm(x * 0.12, z * 0.12, 2) * 4.5 * mask;
+      }
+    }
+
+    if (d > KUNLUN.weakWaterOuter && d <= KUNLUN.radius) {
+      const landH = kunlunRingLandHeight(x, z) + 0.2 + fbm(x * 0.11, z * 0.11, 2) * 0.22;
+      const eastLift = smoothstep(KUNLUN.cx - 28, KUNLUN.cx + 52, x);
+      if (eastLift > 0.08) {
+        h = lerp(h, landH, eastLift * 0.85 * mask);
+      }
+      const westLift = smoothstep(KUNLUN.cx + 32, KUNLUN.cx - 38, x);
+      if (westLift > 0.08) {
+        h = lerp(h, landH, westLift * 0.8 * mask);
       }
     }
 
@@ -1031,7 +1064,7 @@
             c.lerp(new THREE.Color(0x280404), (1 - n) * 0.45);
           } else if (kd > KUNLUN.weakWaterOuter && kd < KUNLUN.fireRingInner) {
             const n = fbm(lx * 0.09, lz * 0.09, 2);
-            c = new THREE.Color(0x1a1414).lerp(new THREE.Color(0x401010), n * 0.7);
+            c = new THREE.Color(0x6a7068).lerp(new THREE.Color(0x8a8e94), n);
           } else {
             c = this.vertexColor(h, slope, false);
             const rockVar = fbm(lx * 0.3, lz * 0.3, 3);
@@ -1379,20 +1412,6 @@
         klGroup.add(ripple);
       }
 
-      const fireGroundMat = new THREE.MeshStandardMaterial({
-        color: 0x501010, emissive: 0x681818, emissiveIntensity: 0.32, roughness: 0.92, metalness: 0.04,
-      });
-      const fireMidR = (KUNLUN.fireRingInner + KUNLUN.fireRingOuter) * 0.5;
-      const fireGroundY = sampleY(cx + fireMidR, cz);
-      const fireGround = new THREE.Mesh(
-        new THREE.RingGeometry(KUNLUN.fireRingInner, KUNLUN.fireRingOuter, 72),
-        fireGroundMat,
-      );
-      fireGround.rotation.x = -Math.PI / 2;
-      fireGround.position.set(cx, fireGroundY + 0.12, cz);
-      fireGround.renderOrder = 2;
-      klGroup.add(fireGround);
-
       const basalt = new THREE.MeshStandardMaterial({ color: 0x581010, roughness: 0.94, metalness: 0.02 });
       const basaltDark = new THREE.MeshStandardMaterial({ color: 0x3a0808, roughness: 0.96, metalness: 0.02 });
       const lavaCrust = new THREE.MeshStandardMaterial({
@@ -1484,7 +1503,7 @@
           if (ty < gridY + KUNLUN.weakWaterLevel - 0.4) return;
         } else if (isInKunlunWeakWaterRing(tx, tz)) {
           return;
-        } else if (ty < gridY + 5.5) {
+        } else if (ty < gridY + WATER_LEVEL + 1.8) {
           return;
         }
         const tree = new THREE.Group();
@@ -3257,10 +3276,6 @@
       });
 
       group.add(root);
-      const label = TerrainGen._makeNameSprite('崑崙神', '#d8e8ff');
-      label.position.set(0, 5.5, 0);
-      label.scale.set(10, 2.5, 1);
-      root.add(label);
 
       return { root, model, hips, tail, faceGroup, pupilL, pupilR, phase: 0 };
     },
@@ -3458,7 +3473,7 @@
 
       group.add(root);
       const label = TerrainGen._makeNameSprite('西王母', '#f0c8e8');
-      label.position.set(0, 4.8, 0);
+      label.position.set(0, 8.6, 0);
       label.scale.set(10, 2.5, 1);
       root.add(label);
 
@@ -4297,7 +4312,7 @@
         this._lastMouseY = e.clientY;
         const sens = this.mouseSensitivity * 0.005;
         this.cameraYaw -= dx * sens;
-        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * sens, 0.08, 1.25);
+        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * sens, -1.05, 1.25);
       });
 
       host.addEventListener('wheel', e => {
@@ -4316,7 +4331,7 @@
         }
         this.cameraPitch = THREE.MathUtils.clamp(
           this.cameraPitch + delta * 0.06,
-          0.08,
+          -1.05,
           1.25,
         );
       }, { passive: false });
@@ -4681,9 +4696,11 @@
       const swimMinY = this.config.gridY + WATER_LEVEL + 0.15;
       const landMinY = pivotY + 0.4;
       const minCamY = THREE.MathUtils.lerp(landMinY, swimMinY, p.swimming ? 1 : (p.inWater ? 0.35 : 0));
+      const groundFloorY = this.config.gridY + 0.3;
+      const finalCamY = sinP >= 0 ? Math.max(camY, minCamY) : Math.max(camY, groundFloorY);
       this._camera.position.set(
         p.pos.x + Math.sin(this.cameraYaw) * cosP * dist,
-        Math.max(camY, minCamY),
+        finalCamY,
         p.pos.z + Math.cos(this.cameraYaw) * cosP * dist,
       );
       this._camera.lookAt(p.pos.x, pivotY, p.pos.z);

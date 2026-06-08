@@ -1,0 +1,4512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shanhai — Natural Terrain 3D</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1410; color: #e8dcc8; font-family: Georgia, 'Times New Roman', serif; }
+    #canvas-host { position: fixed; inset: 0; cursor: grab; }
+    #canvas-host.playing { cursor: crosshair; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #panel-wrap {
+      position: fixed; top: 12px; left: 12px; z-index: 10;
+      display: flex; align-items: flex-start;
+    }
+    #panel {
+      width: 270px; max-height: calc(100vh - 24px); flex-shrink: 0;
+      overflow-y: auto; background: rgba(28, 22, 16, 0.9); border: 1px solid rgba(180, 140, 80, 0.35);
+      border-radius: 8px; padding: 14px; font-size: 12px; line-height: 1.45; backdrop-filter: blur(6px);
+      transition: margin-left 0.28s ease, opacity 0.22s ease;
+    }
+    #panel-wrap.collapsed #panel {
+      margin-left: -278px; opacity: 0; pointer-events: none;
+    }
+    #panel-toggle {
+      flex-shrink: 0; width: 22px; min-height: 72px; margin-top: 8px;
+      background: rgba(28, 22, 16, 0.92); border: 1px solid rgba(180, 140, 80, 0.35);
+      border-left: none; border-radius: 0 6px 6px 0; color: #e8c878;
+      cursor: pointer; font-size: 11px; padding: 8px 2px; line-height: 1.2;
+    }
+    #panel-wrap.collapsed #panel-toggle {
+      border-left: 1px solid rgba(180, 140, 80, 0.35); border-radius: 6px;
+    }
+    #panel h1 { font-size: 15px; font-weight: 600; color: #e8c878; margin-bottom: 10px; letter-spacing: 0.12em; }
+    #panel h2 { font-size: 11px; font-weight: 600; color: #c8b090; margin: 14px 0 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+    label { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+    label span { color: #8a98a8; }
+    input[type="number"], input[type="color"], select {
+      width: 110px; background: #121820; border: 1px solid #2a3544; color: #dce4ee;
+      border-radius: 4px; padding: 4px 6px; font: inherit;
+    }
+    button {
+      width: 100%; margin-top: 6px; padding: 7px 10px; background: #1a2838;
+      border: 1px solid #3a5570; color: #b8d8ff; border-radius: 5px; cursor: pointer; font: inherit;
+    }
+    button:hover { background: #223448; }
+    button.primary { background: #3a2a18; border-color: #a87840; color: #f0d8a0; }
+    button.primary:hover { background: #4a3820; }
+    #nav-compass {
+      position: fixed; top: 12px; right: 12px; width: 156px; height: 156px;
+      pointer-events: none; z-index: 8;
+    }
+    #minimap-wrap {
+      position: absolute; left: 18px; top: 18px; width: 120px; height: 120px;
+      border-radius: 50%; overflow: hidden;
+      border: 2px solid rgba(200, 160, 80, 0.5);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+      background: rgba(20, 30, 40, 0.9);
+    }
+    #minimap-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #minimap-overlay { pointer-events: none; }
+    .compass-label {
+      position: absolute; font-size: 13px; font-weight: 600; color: #e8c878;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+    }
+    .compass-label.n { top: 0; left: 50%; transform: translateX(-50%); }
+    .compass-label.s { bottom: 0; left: 50%; transform: translateX(-50%); }
+    .compass-label.e { right: 0; top: 50%; transform: translateY(-50%); }
+    .compass-label.w { left: 0; top: 50%; transform: translateY(-50%); }
+    #hint {
+      position: fixed; bottom: 12px; left: 12px; right: 12px; font-size: 11px;
+      color: rgba(180, 200, 220, 0.55); pointer-events: none; text-align: center;
+    }
+    #region-banner {
+      position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-8px);
+      padding: 10px 28px; font-size: 20px; letter-spacing: 0.18em; color: #f0d890;
+      background: rgba(28, 22, 16, 0.88); border: 1px solid rgba(200, 160, 80, 0.45);
+      border-radius: 8px; opacity: 0; pointer-events: none; z-index: 15;
+      transition: opacity 0.45s ease, transform 0.45s ease;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    }
+    #region-banner.show {
+      opacity: 1; transform: translateX(-50%) translateY(0);
+    }
+    #hud {
+      position: fixed; top: 178px; right: 12px; padding: 10px 14px;
+      background: rgba(8, 12, 18, 0.82); border: 1px solid rgba(120, 160, 220, 0.2);
+      border-radius: 8px; font-size: 11px; line-height: 1.6; color: #9ab0c8; min-width: 150px;
+    }
+    #hud .on { color: #7ee8a0; }
+    #hud .off { color: #ff9070; }
+    #hud .swim { color: #70c8ff; }
+    .val { color: #ffd080; min-width: 28px; text-align: right; }
+    input[type="range"] { accent-color: #6a9ec8; width: 100%; margin-bottom: 10px; }
+    #object-list { margin-top: 6px; max-height: 90px; overflow-y: auto; font-size: 11px; color: #7a8a9a; }
+    #object-list div { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    #overlay {
+      position: fixed; inset: 0; display: grid; place-items: center;
+      background: rgba(4, 8, 12, 0.55); color: #dce8f8; font-size: 15px;
+      letter-spacing: 0.04em; pointer-events: none; opacity: 0; transition: opacity 0.25s;
+    }
+    #overlay.show { opacity: 1; pointer-events: auto; cursor: pointer; }
+    #nanshan-lore {
+      position: fixed; top: 320px; right: 12px; width: 280px; max-width: calc(100vw - 24px);
+      padding: 16px 36px 16px 16px; z-index: 12;
+      background: rgba(28, 32, 22, 0.94); border: 1px solid rgba(160, 200, 120, 0.45);
+      border-radius: 8px; font-size: 13px; line-height: 1.75; color: #e0ecd8;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      opacity: 0; transform: translateX(12px); pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    #nanshan-lore.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
+    #nanshan-lore h3 {
+      font-size: 14px; color: #c8e8a0; letter-spacing: 0.12em; margin-bottom: 10px; font-weight: 600;
+    }
+    #nanshan-lore p { text-indent: 2em; }
+    #nanshan-lore-close {
+      position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+      background: rgba(40, 50, 32, 0.8); border: 1px solid rgba(160, 200, 120, 0.35);
+      border-radius: 4px; color: #c8e8a0; cursor: pointer; font-size: 16px; line-height: 1;
+      padding: 0;
+    }
+    #nanshan-lore-close:hover { background: rgba(60, 80, 48, 0.9); }
+    #xingtian-lore {
+      position: fixed; top: 320px; right: 12px; width: 280px; max-width: calc(100vw - 24px);
+      padding: 16px 36px 16px 16px; z-index: 12;
+      background: rgba(32, 22, 18, 0.94); border: 1px solid rgba(200, 120, 80, 0.45);
+      border-radius: 8px; font-size: 13px; line-height: 1.75; color: #ecd8d0;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      opacity: 0; transform: translateX(12px); pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    #xingtian-lore.show { opacity: 1; transform: translateX(0); pointer-events: auto; }
+    #xingtian-lore h3 {
+      font-size: 14px; color: #ff9070; letter-spacing: 0.12em; margin-bottom: 10px; font-weight: 600;
+    }
+    #xingtian-lore p { text-indent: 2em; }
+    #xingtian-lore-close {
+      position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+      background: rgba(50, 32, 28, 0.8); border: 1px solid rgba(200, 120, 80, 0.35);
+      border-radius: 4px; color: #ff9070; cursor: pointer; font-size: 16px; line-height: 1;
+      padding: 0;
+    }
+    #xingtian-lore-close:hover { background: rgba(70, 42, 32, 0.9); }
+    #fusang-lore, #jingwei-lore, #beishan-lore, #qingqiu-lore, #kunlun-lore {
+      position: fixed; top: 320px; right: 12px; width: 280px; max-width: calc(100vw - 24px);
+      padding: 16px 36px 16px 16px; z-index: 12;
+      border-radius: 8px; font-size: 13px; line-height: 1.75;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      opacity: 0; transform: translateX(12px); pointer-events: none;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    #fusang-lore { background: rgba(28, 24, 16, 0.94); border: 1px solid rgba(255, 200, 100, 0.45); color: #f0e8d0; }
+    #jingwei-lore, #beishan-lore { background: rgba(22, 26, 32, 0.94); border: 1px solid rgba(140, 180, 220, 0.45); color: #dce8f4; }
+    #qingqiu-lore { background: rgba(24, 20, 28, 0.94); border: 1px solid rgba(200, 160, 220, 0.45); color: #ece4f4; top: 400px; }
+    #kunlun-lore { background: rgba(20, 22, 32, 0.94); border: 1px solid rgba(180, 200, 240, 0.45); color: #e0e8f8; top: 460px; }
+    #fusang-lore.show, #jingwei-lore.show, #beishan-lore.show, #qingqiu-lore.show, #kunlun-lore.show {
+      opacity: 1; transform: translateX(0); pointer-events: auto;
+    }
+    #fusang-lore h3 { font-size: 14px; color: #ffd080; letter-spacing: 0.12em; margin-bottom: 10px; font-weight: 600; }
+    #jingwei-lore h3, #beishan-lore h3 { font-size: 14px; color: #90c8f0; letter-spacing: 0.12em; margin-bottom: 10px; font-weight: 600; }
+    #qingqiu-lore h3 { font-size: 14px; color: #d8a8f0; letter-spacing: 0.12em; margin-bottom: 10px; font-weight: 600; }
+    #kunlun-lore h3 { font-size: 14px; color: #a8c8f0; letter-spacing: 0.12em; margin-bottom: 10px; font-weight: 600; }
+    #fusang-lore p, #jingwei-lore p, #beishan-lore p, #qingqiu-lore p, #kunlun-lore p { text-indent: 2em; }
+    .lore-close {
+      position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+      border-radius: 4px; cursor: pointer; font-size: 16px; line-height: 1; padding: 0;
+    }
+    #fusang-lore-close { background: rgba(50, 40, 20, 0.8); border: 1px solid rgba(255, 200, 100, 0.35); color: #ffd080; }
+    #jingwei-lore-close { background: rgba(30, 38, 50, 0.8); border: 1px solid rgba(140, 180, 220, 0.35); color: #90c8f0; }
+    #qingqiu-lore-close { background: rgba(40, 28, 48, 0.8); border: 1px solid rgba(200, 160, 220, 0.35); color: #d8a8f0; }
+    #kunlun-lore-close { background: rgba(28, 32, 48, 0.8); border: 1px solid rgba(180, 200, 240, 0.35); color: #a8c8f0; }
+  </style>
+</head>
+<body>
+  <div id="canvas-host"></div>
+  <div id="overlay" class="show">
+    <div style="text-align:center;max-width:520px;padding:0 20px;">
+      <div style="font-size:28px;color:#e8c878;letter-spacing:0.2em;margin-bottom:12px;">山海</div>
+      <div style="font-size:14px;color:#c8b090;margin-bottom:16px;">Mountains, plains &amp; lakes</div>
+      WASD move · Space swim up · Shift sprint · Ctrl dive · RMB orbit · Scroll zoom · Esc edit · ` panel
+    </div>
+  </div>
+
+  <div id="region-banner" aria-live="polite"></div>
+
+  <div id="nanshan-lore" aria-live="polite">
+    <button id="nanshan-lore-close" type="button" title="Close">×</button>
+    <h3>南山經 · 招搖之山</h3>
+    <p>臨於西海之上，多桂，多金玉。有草焉，其狀如韭而青華，其名曰祝餘，食之不饑。有木焉，其狀如榖而黑理，其華四照，其名曰迷穀，佩之不迷。有獸焉，其狀如禺而白耳，伏行人走，其名曰狌狌，食之善走。</p>
+  </div>
+
+  <div id="xingtian-lore" aria-live="polite">
+    <button id="xingtian-lore-close" type="button" title="Close">×</button>
+    <h3>刑天</h3>
+    <p>刑天與帝爭神，帝斷其首，葬之常羊之山，乃以乳為目，以臍為口，操干戚以舞。</p>
+  </div>
+
+  <div id="fusang-lore" aria-live="polite">
+    <button id="fusang-lore-close" class="lore-close" type="button" title="Close">×</button>
+    <h3>扶桑</h3>
+    <p>湯谷上有扶桑，十日所浴，在黑齒北。居水中，有大木，九日居下枝，一日居上枝。</p>
+  </div>
+
+  <div id="jingwei-lore" aria-live="polite">
+    <button id="jingwei-lore-close" class="lore-close" type="button" title="Close">×</button>
+    <h3>精衛</h3>
+    <p>有鳥焉，其狀如烏，文首、白喙、赤足，名曰精衛，其鳴自詨。是炎帝之少女，名曰女娃，女娃遊於東海，溺而不返，故為精衛，常銜西山之木石，以堙於東海。</p>
+  </div>
+
+  <div id="qingqiu-lore" aria-live="polite">
+    <button id="qingqiu-lore-close" class="lore-close" type="button" title="Close">×</button>
+    <h3>南山經 · 青丘之山</h3>
+    <p>又東三百里，曰青丘之山，其陽多玉，其陰多青雘。有獸焉，其狀如狐而九尾，其音如嬰兒，能食人，食者不蠱。</p>
+  </div>
+
+  <div id="kunlun-lore" aria-live="polite">
+    <button id="kunlun-lore-close" class="lore-close" type="button" title="Close">×</button>
+    <h3>西山經 · 崑崙</h3>
+    <p>西海之南，流沙之濱，赤水之後，黑水之前，有大山，名曰崑崙之丘。有神，人面虎身，有文有尾，皆白，處之。其下有弱水之淵環之，其外有炎火之山，投物輒然。有人，戴勝，虎齒，有豹尾，穴處，名曰西王母。此山萬物盡有。</p>
+  </div>
+
+  <div id="nav-compass" aria-hidden="true">
+    <span class="compass-label n">北</span>
+    <span class="compass-label s">南</span>
+    <span class="compass-label e">東</span>
+    <span class="compass-label w">西</span>
+    <div id="minimap-wrap">
+      <canvas id="minimap-bg" width="120" height="120"></canvas>
+      <canvas id="minimap-overlay" width="120" height="120"></canvas>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div style="color:#e8c878;font-size:12px;margin-bottom:4px;" id="hud-region">山海</div>
+    <div>Mode: <span id="hud-mode">edit</span> · FPS: <span id="hud-fps">—</span></div>
+    <div>Pos: <span id="hud-pos">0, 0, 0</span></div>
+    <div>Ground: <span id="hud-ground" class="off">no</span></div>
+    <div>Water: <span id="hud-water" class="off">no</span></div>
+  </div>
+
+  <div id="panel-wrap" class="collapsed">
+    <div id="panel">
+    <h1>山海 SHANHAI</h1>
+    <button id="btn-play" class="primary">▶ Explore wilderness</button>
+    <button id="btn-edit">✎ Return to edit mode (Esc)</button>
+
+    <h2>Camera</h2>
+    <label><span>Mouse sensitivity</span><span id="cfg-sens-val" class="val">1.0</span></label>
+    <input id="cfg-mouseSens" type="range" min="0.2" max="3" step="0.1" value="1">
+    <label><span>Camera zoom</span><span id="cfg-zoom-val" class="val">5.5</span></label>
+    <input id="cfg-zoom" type="range" min="2.6" max="13" step="0.1" value="5.5">
+
+    <h2>Grid</h2>
+    <label><span>World size</span><input id="cfg-worldSize" type="number" min="80" max="600" value="500"></label>
+    <label><span>Divisions</span><input id="cfg-divisions" type="number" min="40" max="400" value="360"></label>
+    <label><span>Cell size</span><input id="cfg-cellSize" type="number" min="0.5" max="4" step="0.1" value="1"></label>
+    <label><span>Major every</span><input id="cfg-majorEvery" type="number" min="5" max="50" value="10"></label>
+    <label><span>Grid Y</span><input id="cfg-gridY" type="number" min="-20" max="20" step="0.5" value="0"></label>
+    <button id="btn-apply">Apply grid settings</button>
+    <button id="btn-regen">Regenerate terrain</button>
+
+    <h2>Quick add</h2>
+    <label><span>X</span><input id="add-x" type="number" step="1" value="200"></label>
+    <label><span>Y</span><input id="add-y" type="number" step="1" value="5"></label>
+    <label><span>Z</span><input id="add-z" type="number" step="1" value="200"></label>
+    <label><span>Shape</span>
+      <select id="add-shape">
+        <option value="box">box (solid)</option>
+        <option value="cylinder">cylinder (solid)</option>
+        <option value="sphere">sphere (solid)</option>
+        <option value="marker">marker</option>
+      </select>
+    </label>
+    <label><span>Color</span><input id="add-color" type="color" value="#ffd080"></label>
+    <label><span>Solid</span><input id="add-solid" type="checkbox" checked></label>
+    <button id="btn-add">Add at coordinates</button>
+    <button id="btn-clear">Clear placed objects</button>
+    <div id="object-list"></div>
+    </div>
+    <button id="panel-toggle" type="button" title="Toggle panel (`)">▶<br>show</button>
+  </div>
+
+  <div id="hint">Plains · terraces · mountains · enterable lakes</div>
+
+  <script type="importmap">
+  { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+  </script>
+  <script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  const WORLD_SIZE = 500;
+  const TERRAIN_RES = 360;
+  const WATER_LEVEL = 3.2;
+  const OCEAN_DEPTH = 1.85;
+  const SEED = 1337;
+  const WORLD_CENTER = WORLD_SIZE * 0.5;
+  const SPAWN = { x: WORLD_CENTER, z: WORLD_CENTER - 50 };
+  const ISLAND = { cx: WORLD_CENTER, cz: WORLD_CENTER, radius: 90, rimHeight: 9 };
+  const ISLAND_MT_OFFSET = 62;
+  const ISLAND_MOUNTAINS = [
+    { id: '北山', cx: WORLD_CENTER, cz: WORLD_CENTER - ISLAND_MT_OFFSET, amp: 13, spread: 17 },
+    { id: '南山', cx: WORLD_CENTER, cz: WORLD_CENTER + ISLAND_MT_OFFSET, amp: 13, spread: 17 },
+    { id: '西山', cx: WORLD_CENTER - ISLAND_MT_OFFSET, cz: WORLD_CENTER, amp: 12, spread: 16 },
+    { id: null, cx: WORLD_CENTER + ISLAND_MT_OFFSET, cz: WORLD_CENTER, amp: 12, spread: 16 },
+  ];
+  const OUTER_DIST = 222;
+  const INNER_OCEAN_IN = ISLAND.radius + 10;
+  const INNER_OCEAN_OUT = 162;
+  const OUTER_OCEAN_IN = 177;
+  const OUTER_RING_IN = OUTER_DIST - 14;
+  const OUTER_RING_OUT = OUTER_DIST + 18;
+  const DAHUANG_START = OUTER_RING_OUT - 8;
+  const FUSANG = {
+    cx: WORLD_CENTER + 168,
+    cz: WORLD_CENTER + 92,
+    poolRadius: 44,
+    radius: 14,
+    id: '扶桑',
+  };
+
+  const JINGWEI = {
+    peakX: WORLD_CENTER,
+    peakZ: WORLD_CENTER - ISLAND_MT_OFFSET,
+    pickX: WORLD_CENTER - 8,
+    pickZ: WORLD_CENTER - ISLAND_MT_OFFSET + 6,
+    id: '精衛',
+  };
+
+  const XINGTIAN = {
+    x: 39,
+    z: 143,
+    id: '刑天',
+    alertRadius: 42,
+    demoRadius: 50,
+  };
+
+  const JIUWEIHU = {
+    x: 189,
+    z: 290,
+    id: '青丘',
+    wanderMinX: 174,
+    wanderMaxX: 232,
+    wanderMinZ: 266,
+    wanderMaxZ: 320,
+    alertRadius: 38,
+  };
+
+  const KUNLUN = {
+    id: '崑崙',
+    cx: WORLD_CENTER - OUTER_DIST,
+    cz: WORLD_CENTER,
+    radius: 72,
+    peakSpread: 44,
+    peakX: WORLD_CENTER - OUTER_DIST,
+    peakZ: WORLD_CENTER,
+    weakWaterInner: 14,
+    weakWaterOuter: 46,
+    weakWaterLevel: WATER_LEVEL + 1.35,
+    fireRingInner: 48,
+    fireRingOuter: 74,
+    craterRadius: 13,
+    godX: WORLD_CENTER - OUTER_DIST + 9,
+    godZ: WORLD_CENTER + 18,
+    xiwangmuX: WORLD_CENTER - OUTER_DIST,
+    xiwangmuZ: WORLD_CENTER,
+    alertRadius: 65,
+  };
+
+  const NANSHAN = {
+    id: '招搖',
+    cx: WORLD_CENTER,
+    cz: WORLD_CENTER + 52,
+    radius: 54,
+    floraRadius: 52,
+    treeExcludeMinX: 226,
+    treeExcludeMaxX: 254,
+    treeExcludeMinZ: 299,
+    treeExcludeMaxZ: 320,
+    peakX: WORLD_CENTER,
+    peakZ: WORLD_CENTER + ISLAND_MT_OFFSET,
+    riverMouthX: WORLD_CENTER - 48,
+    riverMouthZ: WORLD_CENTER + 46,
+    waterfallX: WORLD_CENTER - 48,
+    waterfallZ: WORLD_CENTER + ISLAND_MT_OFFSET - 6,
+  };
+
+  const NANSHAN_TREE_SPOTS = [
+    [234, 262, 'cassia', 1.05],
+    [242, 258, 'cinnamon', 1.1],
+    [250, 255, 'cassia', 1.0],
+    [258, 258, 'cassia', 1.08],
+    [266, 262, 'cinnamon', 1.0],
+    [272, 268, 'cassia', 0.98],
+    [228, 268, 'cassia', 1.1],
+    [236, 272, 'cone', 0.9],
+    [244, 270, 'cassia', 1.0],
+    [252, 268, 'cinnamon', 1.05],
+    [260, 272, 'cassia', 1.0],
+    [268, 270, 'cassia', 0.95],
+    [276, 274, 'cone', 0.88],
+    [222, 276, 'cassia', 1.05],
+    [248, 278, 'cassia', 1.0],
+    [254, 282, 'cinnamon', 1.0],
+    [262, 280, 'cassia', 0.95],
+    [270, 284, 'cassia', 1.0],
+    [238, 286, 'cinnamon', 0.95],
+    [256, 286, 'cassia', 1.05],
+    [264, 288, 'cone', 0.85],
+    [218, 288, 'cassia', 1.0],
+    [282, 288, 'cassia', 1.0],
+    [226, 282, 'cinnamon', 0.92],
+    [274, 282, 'cassia', 0.95],
+    [216, 296, 'cassia', 1.0],
+    [222, 302, 'cinnamon', 1.0],
+    [218, 310, 'cassia', 0.92],
+    [224, 318, 'cone', 0.85],
+    [220, 324, 'cassia', 0.88],
+    [228, 292, 'cassia', 0.98],
+    [284, 296, 'cassia', 1.0],
+    [278, 302, 'cinnamon', 1.05],
+    [282, 310, 'cassia', 0.95],
+    [276, 318, 'cassia', 1.0],
+    [280, 324, 'cinnamon', 0.88],
+    [272, 292, 'cassia', 0.98],
+    [232, 294, 'cassia', 1.0],
+    [268, 294, 'cinnamon', 1.0],
+    [240, 298, 'cone', 0.88],
+    [260, 298, 'cassia', 0.95],
+    [270, 306, 'cinnamon', 0.92],
+    [222, 328, 'cassia', 0.85],
+    [278, 328, 'cassia', 0.88],
+    [234, 322, 'cinnamon', 0.9],
+    [266, 322, 'cassia', 0.9],
+    [240, 326, 'cone', 0.82],
+    [260, 326, 'cassia', 0.85],
+    [218, 314, 'cinnamon', 0.88],
+    [282, 314, 'cassia', 0.9],
+    [246, 290, 'cassia', 1.0],
+    [254, 290, 'cinnamon', 1.0],
+    [262, 302, 'cassia', 1.0],
+    [256, 306, 'cassia', 0.92],
+    [264, 314, 'cinnamon', 0.9],
+    [242, 324, 'cassia', 0.82],
+    [258, 324, 'cinnamon', 0.82],
+    [230, 262, 'cassia', 1.05],
+    [270, 262, 'cinnamon', 1.0],
+    [224, 270, 'cassia', 1.0],
+    [276, 270, 'cassia', 0.98],
+    [232, 278, 'cinnamon', 0.95],
+    [268, 278, 'cassia', 1.0],
+    [246, 264, 'cassia', 1.0],
+    [254, 264, 'cinnamon', 1.05],
+    [240, 274, 'cassia', 0.95],
+    [260, 274, 'cassia', 1.0],
+    [248, 284, 'cinnamon', 0.95],
+    [252, 274, 'cone', 0.88],
+  ];
+
+  const TMP_V3A = new THREE.Vector3();
+  const TMP_V3B = new THREE.Vector3();
+  const TMP_V3C = new THREE.Vector3();
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function smoothstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  function hash2(ix, iz) {
+    let h = SEED + ix * 374761393 + iz * 668265263;
+    h = (h ^ (h >> 13)) * 1274126177;
+    return (h ^ (h >> 16)) / 4294967296;
+  }
+
+  function valueNoise(x, z) {
+    const x0 = Math.floor(x), z0 = Math.floor(z);
+    const fx = x - x0, fz = z - z0;
+    const sx = fx * fx * (3 - 2 * fx);
+    const sz = fz * fz * (3 - 2 * fz);
+    const n00 = hash2(x0, z0);
+    const n10 = hash2(x0 + 1, z0);
+    const n01 = hash2(x0, z0 + 1);
+    const n11 = hash2(x0 + 1, z0 + 1);
+    const nx0 = lerp(n00, n10, sx);
+    const nx1 = lerp(n01, n11, sx);
+    return lerp(nx0, nx1, sz);
+  }
+
+  function fbm(x, z, octaves = 4, lac = 2, gain = 0.5) {
+    let amp = 1, freq = 1, sum = 0, norm = 0;
+    for (let i = 0; i < octaves; i++) {
+      sum += valueNoise(x * freq, z * freq) * amp;
+      norm += amp;
+      amp *= gain;
+      freq *= lac;
+    }
+    return sum / norm;
+  }
+
+  const LAKES = [
+    { cx: WORLD_CENTER - 42, cz: WORLD_CENTER + 35, radius: 7, depth: 1.6 },
+    { cx: WORLD_CENTER + 30, cz: WORLD_CENTER - 25, radius: 6, depth: 1.4 },
+    { cx: WORLD_CENTER - 130, cz: WORLD_CENTER + 112, radius: 26, depth: 2.8 },
+    { cx: WORLD_CENTER + 122, cz: WORLD_CENTER - 88, radius: 22, depth: 2.6 },
+    { cx: WORLD_CENTER + 72, cz: WORLD_CENTER + 92, radius: 15, depth: 2.2 },
+  ];
+
+  function lakeBedDepth(lake) {
+    const cap = lake.radius < 10 ? 1.6 : lake.radius < 20 ? 2.2 : 2.8;
+    return Math.min(lake.depth, cap);
+  }
+
+  function oceanFloorY(x, z) {
+    return WATER_LEVEL - OCEAN_DEPTH + fbm(x * 0.035, z * 0.035, 2) * 0.15;
+  }
+
+  const PEAKS = [
+    { cx: WORLD_CENTER, cz: WORLD_CENTER - OUTER_DIST, amp: 50, spread: 46 },
+    { cx: WORLD_CENTER, cz: WORLD_CENTER + OUTER_DIST, amp: 48, spread: 44 },
+    { cx: WORLD_CENTER + OUTER_DIST, cz: WORLD_CENTER, amp: 46, spread: 42 },
+    { cx: WORLD_CENTER - OUTER_DIST, cz: WORLD_CENTER, amp: 48, spread: 44 },
+  ];
+
+  const PLATEAUS = [
+    { cx: WORLD_CENTER - 118, cz: WORLD_CENTER + 180, radius: 42, height: 5 },
+    { cx: WORLD_CENTER + 168, cz: WORLD_CENTER + 118, radius: 36, height: 4.5 },
+  ];
+
+  function nanshanMask(x, z) {
+    const d = Math.hypot(x - NANSHAN.cx, z - NANSHAN.cz);
+    if (d > NANSHAN.radius) return 0;
+    return 1 - smoothstep(NANSHAN.radius * 0.52, NANSHAN.radius, d);
+  }
+
+  function isInNanshan(x, z) {
+    return nanshanMask(x, z) > 0.22;
+  }
+
+  function kunlunMask(x, z) {
+    const d = Math.hypot(x - KUNLUN.cx, z - KUNLUN.cz);
+    if (d > KUNLUN.radius) return 0;
+    return 1 - smoothstep(KUNLUN.radius * 0.55, KUNLUN.radius, d);
+  }
+
+  function isInKunlun(x, z) {
+    return kunlunMask(x, z) > 0.15;
+  }
+
+  function nanshanFoothillMask(x, z) {
+    const northBase = smoothstep(NANSHAN.peakZ - 2, NANSHAN.cz - 20, z);
+    const d = Math.hypot(x - NANSHAN.cx, z - NANSHAN.cz);
+    const radial = 1 - smoothstep(NANSHAN.floraRadius * 0.35, NANSHAN.floraRadius * 0.88, d);
+    return northBase * radial;
+  }
+
+  function isInOtherIslandMountain(x, z) {
+    for (const m of ISLAND_MOUNTAINS) {
+      if (m.id === '南山') continue;
+      if (Math.hypot(x - m.cx, z - m.cz) < m.spread * 1.55) return true;
+    }
+    return false;
+  }
+
+  function nanshanValleyMask(x, z) {
+    if (nanshanMask(x, z) < 0.12) return 0;
+    const vx = (x - NANSHAN.cx) / 38;
+    const vz = (z - NANSHAN.cz + 4) / 34;
+    const bowl = Math.exp(-(vx * vx * 0.22 + vz * vz * 0.26));
+    const ripple = Math.abs(Math.sin(x * 0.048 + 0.6) + Math.cos(z * 0.042 - 0.4));
+    return bowl * (1 - ripple * 0.32);
+  }
+
+  function nanshanFloraMask(x, z) {
+    if (isInOtherIslandMountain(x, z)) return 0;
+    if (nanshanMask(x, z) < 0.08) return 0;
+    const d = Math.hypot(x - NANSHAN.cx, z - NANSHAN.cz);
+    const r = NANSHAN.floraRadius;
+    if (d > r) return 0;
+    const westKeep = smoothstep(ISLAND.cx - 16, ISLAND.cx + 10, x);
+    const northTrim = smoothstep(ISLAND.cz + 14, ISLAND.cz + 32, z);
+    const eastTrim = smoothstep(ISLAND.cx + 26, ISLAND.cx + 4, x);
+    const mask = (1 - smoothstep(r * 0.48, r, d)) * westKeep * northTrim * eastTrim;
+    return mask;
+  }
+
+  function isInNanshanFlora(x, z) {
+    return nanshanFloraMask(x, z) > 0.16;
+  }
+
+  function isInNanshanTreeExcludeZone(x, z) {
+    return x >= NANSHAN.treeExcludeMinX && x <= NANSHAN.treeExcludeMaxX
+      && z >= NANSHAN.treeExcludeMinZ && z <= NANSHAN.treeExcludeMaxZ;
+  }
+
+  function isInNanshanTreeFlora(x, z) {
+    if (isInNanshanTreeExcludeZone(x, z)) return false;
+    return nanshanMask(x, z) > 0.06;
+  }
+
+  function isValidJiweiFoxPos(x, z, sampleHeight) {
+    if (x < JIUWEIHU.wanderMinX || x > JIUWEIHU.wanderMaxX) return false;
+    if (z < JIUWEIHU.wanderMinZ || z > JIUWEIHU.wanderMaxZ) return false;
+    const h = sampleHeight(x, z);
+    if (h < WATER_LEVEL + 0.45 || h > 24) return false;
+    if (isInNanshanValleyFloor(x, z)) return false;
+    return true;
+  }
+
+  // Tight central bowl only — the downward-opening depression, not mountainside slopes.
+  function isInNanshanValleyFloor(x, z) {
+    const dx = x - NANSHAN.cx;
+    const dz = z - (NANSHAN.cz + 2);
+    const dist = Math.hypot(dx, dz);
+    if (dist > 14) return false;
+    return nanshanValleyMask(x, z) > 0.34;
+  }
+
+  function isValidXingxingPos(x, z, sampleHeight) {
+    if (nanshanFoothillMask(x, z) < 0.22) return false;
+    if (isInOtherIslandMountain(x, z)) return false;
+    const h = sampleHeight(x, z);
+    if (h < WATER_LEVEL + 0.8 || h > 12.5) return false;
+    const d = Math.hypot(x - NANSHAN.cx, z - NANSHAN.cz);
+    if (d > NANSHAN.floraRadius * 0.88) return false;
+    if (d < NANSHAN.floraRadius * 0.18) return false;
+    return true;
+  }
+
+  function isValidXingxingMountainPos(x, z, sampleHeight) {
+    if (!isInNanshan(x, z)) return false;
+    if (isInOtherIslandMountain(x, z)) return false;
+    const h = sampleHeight(x, z);
+    if (h < 11.5 || h > 23.5) return false;
+    return true;
+  }
+
+  function distToSegment(px, pz, ax, az, bx, bz) {
+    const abx = bx - ax;
+    const abz = bz - az;
+    const apx = px - ax;
+    const apz = pz - az;
+    const denom = abx * abx + abz * abz;
+    const t = denom < 1e-6 ? 0 : clamp((apx * abx + apz * abz) / denom, 0, 1);
+    return Math.hypot(px - (ax + abx * t), pz - (az + abz * t));
+  }
+
+  function applyNanshanTerrain(x, z, h) {
+    const mask = nanshanMask(x, z);
+    if (mask <= 0) return h;
+
+    const pdx = (x - NANSHAN.peakX) / 24;
+    const pdz = (z - NANSHAN.peakZ) / 22;
+    h += 19 * Math.exp(-(pdx * pdx + pdz * pdz) * 2.0) * mask;
+    h += fbm(x * 0.07 + 3, z * 0.07 - 2, 3) * 3.2 * mask;
+    h += Math.sin(x * 0.14) * Math.cos(z * 0.11) * 1.1 * mask;
+
+    const riverD = distToSegment(x, z, NANSHAN.peakX, NANSHAN.peakZ, NANSHAN.riverMouthX, NANSHAN.riverMouthZ);
+    if (riverD < 5.5) {
+      const rv = 1 - smoothstep(5.5, 0.4, riverD);
+      h = lerp(h, WATER_LEVEL - 1.1 - rv * 0.6, rv * 0.92);
+    }
+
+    const westFace = smoothstep(ISLAND.cx - 4, ISLAND.cx - 38, x) * smoothstep(ISLAND.cz + 10, ISLAND.cz + 58, z);
+    if (westFace > 0.1) {
+      const cliff = smoothstep(ISLAND.cx - 48, ISLAND.cx - 18, x);
+      h += cliff * 5.5 * mask * westFace;
+      const shoreDrop = smoothstep(ISLAND.cx - 40, ISLAND.cx - 58, x);
+      if (shoreDrop > 0) {
+        h = lerp(h, WATER_LEVEL + 0.35 + fbm(x * 0.1, z * 0.1, 2) * 0.25, shoreDrop * 0.75 * mask);
+      }
+    }
+
+    const valleyRipple = Math.abs(Math.sin((x - NANSHAN.cx) * 0.052) + Math.cos((z - NANSHAN.cz) * 0.046));
+    const valleyWide = smoothstep(0.08, 0.82, 1 - valleyRipple);
+    const vx = (x - NANSHAN.cx) / 40;
+    const vz = (z - NANSHAN.cz + 4) / 36;
+    const valleyBowl = Math.exp(-(vx * vx * 0.2 + vz * vz * 0.24));
+    h -= (valleyWide * 2.4 + valleyBowl * 2.8) * mask;
+
+    return h;
+  }
+
+  function applyKunlunTerrain(x, z, h) {
+    const mask = kunlunMask(x, z);
+    if (mask <= 0) return h;
+
+    const d = Math.hypot(x - KUNLUN.cx, z - KUNLUN.cz);
+    const spread = KUNLUN.peakSpread;
+    const pdx = (x - KUNLUN.peakX) / spread;
+    const pdz = (z - KUNLUN.peakZ) / spread;
+    const d2 = pdx * pdx + pdz * pdz;
+    h += 52 * Math.exp(-d2 * 2.2) * mask;
+    h += 52 * 0.35 * Math.exp(-d2 * 0.55) * (fbm(x * 0.15, z * 0.15, 3) - 0.5) * mask;
+    h += fbm(x * 0.06 - 5, z * 0.06 + 3, 3) * 5 * mask;
+
+    if (d >= KUNLUN.weakWaterInner && d <= KUNLUN.weakWaterOuter) {
+      const mid = (KUNLUN.weakWaterInner + KUNLUN.weakWaterOuter) * 0.5;
+      const half = (KUNLUN.weakWaterOuter - KUNLUN.weakWaterInner) * 0.5;
+      const ringT = 1 - Math.abs(d - mid) / half;
+      const trench = smoothstep(0, 1, ringT);
+      h = lerp(h, KUNLUN.weakWaterLevel - 1.8 - trench * 0.35, trench * 0.94 * mask);
+    }
+
+    const craterD = Math.hypot(x - KUNLUN.peakX, z - KUNLUN.peakZ);
+    if (craterD < KUNLUN.craterRadius) {
+      const bowl = Math.pow(1 - craterD / KUNLUN.craterRadius, 1.35);
+      h -= bowl * 24 * mask;
+      if (craterD < KUNLUN.craterRadius * 0.42) {
+        const flat = 1 - craterD / (KUNLUN.craterRadius * 0.42);
+        h = lerp(h, 34.5 + fbm(x * 0.25, z * 0.25, 2) * 0.4, flat * flat * mask);
+      }
+    }
+
+    if (d >= KUNLUN.fireRingInner && d <= KUNLUN.fireRingOuter) {
+      const fireAng = Math.atan2(z - KUNLUN.cz, x - KUNLUN.cx);
+      const mid = (KUNLUN.fireRingInner + KUNLUN.fireRingOuter) * 0.5;
+      const fireBump = Math.exp(-((d - mid) ** 2) / 48)
+        * (0.65 + 0.35 * Math.sin(fireAng * 6 + fbm(x * 0.08, z * 0.08, 2) * 10));
+      h += fireBump * 8 * mask;
+      if (d > KUNLUN.fireRingInner + 3 && d < KUNLUN.fireRingOuter - 4) {
+        h += fbm(x * 0.12, z * 0.12, 2) * 4.5 * mask;
+      }
+    }
+
+    const westShore = smoothstep(KUNLUN.cx + 25, KUNLUN.cx - 30, x);
+    if (westShore > 0.1 && d < KUNLUN.radius * 0.95) {
+      h = lerp(h, WATER_LEVEL + 0.5 + fbm(x * 0.12, z * 0.12, 2) * 0.4, westShore * 0.55 * mask);
+    }
+
+    const eastShore = smoothstep(KUNLUN.cx - 20, KUNLUN.cx + 55, x);
+    if (eastShore > 0.1 && d < KUNLUN.radius * 0.85) {
+      h = lerp(h, WATER_LEVEL + 0.8 + fbm(x * 0.1, z * 0.1, 2) * 0.35, eastShore * 0.35 * mask);
+    }
+
+    return h;
+  }
+
+  function isIslandPlain(x, z) {
+    const d = Math.hypot(x - ISLAND.cx, z - ISLAND.cz);
+    if (d > ISLAND.radius * 0.72) return false;
+    if (isInNanshan(x, z)) return false;
+    for (const m of ISLAND_MOUNTAINS) {
+      if (Math.hypot(x - m.cx, z - m.cz) < m.spread * 1.35) return false;
+    }
+    return true;
+  }
+
+  function lakeBowl(x, z) {
+    let best = 0;
+    for (const lake of LAKES) {
+      const dx = x - lake.cx, dz = z - lake.cz;
+      const d = Math.hypot(dx, dz);
+      const t = 1 - smoothstep(lake.radius * 0.15, lake.radius, d);
+      if (t > best) best = t;
+    }
+    return best;
+  }
+
+  function terrainHeightRaw(x, z) {
+    let h = fbm(x * 0.022, z * 0.022, 5) * 4.5;
+    h += fbm(x * 0.06, z * 0.06, 3) * 1.2;
+
+    const terraceNoise = fbm(x * 0.04 + 12, z * 0.04 - 7, 2);
+    const terrace = Math.floor(terraceNoise * 6) * 0.55;
+    h += terrace * (1 - lakeBowl(x, z) * 0.85);
+
+    for (const pl of PLATEAUS) {
+      const d = Math.hypot(x - pl.cx, z - pl.cz);
+      const t = 1 - smoothstep(pl.radius * 0.35, pl.radius, d);
+      if (t > 0) h = lerp(h, pl.height + fbm(x * 0.12, z * 0.12, 2) * 0.6, t * t);
+    }
+
+    const idist = Math.hypot(x - ISLAND.cx, z - ISLAND.cz);
+    if (idist < ISLAND.radius) {
+      const nd = idist / ISLAND.radius;
+      const mask = 1 - smoothstep(0.9, 1, nd);
+      const plainsH = ISLAND.rimHeight * 0.8 + fbm(x * 0.05, z * 0.05, 2) * 0.28;
+      const edgeH = ISLAND.rimHeight + fbm(x * 0.08, z * 0.08, 2) * 0.65;
+      const islandBase = lerp(plainsH, edgeH, smoothstep(0.45, 0.92, nd));
+      h = lerp(h, islandBase, mask);
+    }
+
+    const cdist = Math.hypot(x - WORLD_CENTER, z - WORLD_CENTER);
+
+    if (cdist > INNER_OCEAN_IN && cdist < INNER_OCEAN_OUT) {
+      const oceanH = oceanFloorY(x, z);
+      const shoreIn = smoothstep(INNER_OCEAN_IN, INNER_OCEAN_IN + 18, cdist);
+      const shoreOut = 1 - smoothstep(INNER_OCEAN_OUT - 12, INNER_OCEAN_OUT, cdist);
+      h = lerp(h, oceanH, shoreIn * shoreOut * 0.96);
+    }
+
+    if (cdist >= INNER_OCEAN_OUT && cdist < OUTER_OCEAN_IN) {
+      const shelfH = WATER_LEVEL - 0.25 + fbm(x * 0.05, z * 0.05, 2) * 0.12;
+      const t = smoothstep(INNER_OCEAN_OUT, OUTER_OCEAN_IN, cdist);
+      h = lerp(h, shelfH, (1 - Math.abs(t - 0.5) * 2) * 0.4);
+    }
+
+    if (cdist > OUTER_OCEAN_IN && cdist < OUTER_RING_IN + 4) {
+      const oceanH = oceanFloorY(x, z);
+      const nearCoast = smoothstep(OUTER_RING_IN - 24, OUTER_RING_IN - 2, cdist);
+      const shallowH = lerp(oceanH, WATER_LEVEL - 0.5, nearCoast);
+      const shoreIn = smoothstep(OUTER_OCEAN_IN, OUTER_OCEAN_IN + 16, cdist);
+      const shoreOut = 1 - smoothstep(OUTER_RING_IN - 2, OUTER_RING_IN + 4, cdist);
+      h = lerp(h, shallowH, shoreIn * shoreOut * 0.96);
+    }
+
+    if (cdist >= OUTER_RING_IN - 20 && cdist <= OUTER_RING_OUT + 10) {
+      const span = OUTER_RING_OUT - OUTER_RING_IN + 30;
+      const u = clamp((cdist - (OUTER_RING_IN - 20)) / span, 0, 1);
+      const coastH = WATER_LEVEL + 0.15 + u * u * 8.5 + fbm(x * 0.02, z * 0.02, 3) * (0.8 + u * 1.4);
+      const blendIn = smoothstep(OUTER_RING_IN - 20, OUTER_RING_IN + 4, cdist);
+      const blendOut = 1 - smoothstep(OUTER_RING_OUT + 4, OUTER_RING_OUT + 12, cdist);
+      h = lerp(h, coastH, blendIn * blendOut);
+    }
+
+    if (cdist > DAHUANG_START) {
+      const wasteH = 15 + fbm(x * 0.018, z * 0.018, 4) * 3.5;
+      const t = smoothstep(DAHUANG_START, DAHUANG_START + 28, cdist);
+      h = lerp(h, wasteH, t * 0.88);
+    }
+
+    for (const m of ISLAND_MOUNTAINS) {
+      if (m.id === '南山') continue;
+      const dx = (x - m.cx) / m.spread;
+      const dz = (z - m.cz) / m.spread;
+      const d2 = dx * dx + dz * dz;
+      h += m.amp * Math.exp(-d2 * 2.4);
+      h += m.amp * 0.22 * Math.exp(-d2 * 0.7) * (fbm(x * 0.18, z * 0.18, 2) - 0.5);
+    }
+
+    h = applyNanshanTerrain(x, z, h);
+    h = applyKunlunTerrain(x, z, h);
+
+    for (const peak of PEAKS) {
+      if (peak.cx === KUNLUN.cx && peak.cz === KUNLUN.cz) continue;
+      const dx = (x - peak.cx) / peak.spread;
+      const dz = (z - peak.cz) / peak.spread;
+      const d2 = dx * dx + dz * dz;
+      h += peak.amp * Math.exp(-d2 * 2.2);
+      h += peak.amp * 0.35 * Math.exp(-d2 * 0.55) * (fbm(x * 0.15, z * 0.15, 3) - 0.5);
+    }
+
+    const ridge = Math.abs(fbm(x * 0.05, z * 0.05, 4) - 0.5) * 2;
+    const mountainMask = clamp((h - 8) / 12, 0, 1);
+    h += ridge * 5 * mountainMask;
+
+    for (const lake of LAKES) {
+      const dx = x - lake.cx, dz = z - lake.cz;
+      const d = Math.hypot(dx, dz);
+      const bowl = 1 - smoothstep(lake.radius * 0.15, lake.radius, d);
+      if (bowl <= 0) continue;
+      const cut = lakeBedDepth(lake);
+      const rim = smoothstep(lake.radius * 0.45, lake.radius * 0.92, d);
+      const bed = WATER_LEVEL - cut;
+      const rimH = lerp(bed, WATER_LEVEL - 0.1, rim);
+      const shore = lerp(rimH, WATER_LEVEL - 0.05, bowl * bowl * 0.35);
+      h = lerp(h, shore, bowl);
+    }
+
+    const fd = Math.hypot(x - FUSANG.cx, z - FUSANG.cz);
+    if (fd < FUSANG.poolRadius) {
+      const bowl = 1 - smoothstep(FUSANG.poolRadius * 0.08, FUSANG.poolRadius, fd);
+      const bed = WATER_LEVEL - 2.4 + fbm(x * 0.12, z * 0.12, 2) * 0.2;
+      h = lerp(h, bed, bowl);
+      if (fd < FUSANG.radius) {
+        const mound = 1 - smoothstep(FUSANG.radius * 0.2, FUSANG.radius, fd);
+        h = lerp(h, WATER_LEVEL - 1.0 + fbm(x * 0.2, z * 0.2, 1) * 0.15, mound * 0.85);
+      }
+    }
+
+    return h;
+  }
+
+  function aabbFromBox(pos, hx, hy, hz) {
+    return {
+      min: new THREE.Vector3(pos.x - hx, pos.y, pos.z - hz),
+      max: new THREE.Vector3(pos.x + hx, pos.y + hy, pos.z + hz),
+    };
+  }
+
+  function resolveAABB(box, solid, axis) {
+    if (box.max.x <= solid.min.x || box.min.x >= solid.max.x) return 0;
+    if (box.max.y <= solid.min.y || box.min.y >= solid.max.y) return 0;
+    if (box.max.z <= solid.min.z || box.min.z >= solid.max.z) return 0;
+    if (axis === 'x') {
+      if (box.max.x - solid.min.x < solid.max.x - box.min.x) return solid.min.x - box.max.x;
+      return solid.max.x - box.min.x;
+    }
+    if (axis === 'y') {
+      if (box.max.y - solid.min.y < solid.max.y - box.min.y) return solid.min.y - box.max.y;
+      return solid.max.y - box.min.y;
+    }
+    if (box.max.z - solid.min.z < solid.max.z - box.min.z) return solid.min.z - box.max.z;
+    return solid.max.z - box.min.z;
+  }
+
+  function pushAABB(colliders, minX, minY, minZ, maxX, maxY, maxZ) {
+    colliders.push({
+      min: new THREE.Vector3(minX, minY, minZ),
+      max: new THREE.Vector3(maxX, maxY, maxZ),
+    });
+  }
+
+  const TerrainGen = {
+    heights: null,
+    res: TERRAIN_RES,
+    size: WORLD_SIZE,
+    staticColliders: [],
+    solidColliderMeshes: [],
+
+    sample(x, z) {
+      const { res, size, heights } = this;
+      const fx = clamp(x / size, 0, 1) * res;
+      const fz = clamp(z / size, 0, 1) * res;
+      const x0 = Math.floor(fx), z0 = Math.floor(fz);
+      const x1 = Math.min(x0 + 1, res), z1 = Math.min(z0 + 1, res);
+      const tx = fx - x0, tz = fz - z0;
+      const h00 = heights[z0 * (res + 1) + x0];
+      const h10 = heights[z0 * (res + 1) + x1];
+      const h01 = heights[z1 * (res + 1) + x0];
+      const h11 = heights[z1 * (res + 1) + x1];
+      const hx0 = lerp(h00, h10, tx);
+      const hx1 = lerp(h01, h11, tx);
+      return lerp(hx0, hx1, tz);
+    },
+
+    isUnderwater(x, z) {
+      return this.sample(x, z) < WATER_LEVEL - 0.1;
+    },
+
+    isSubmerged(x, z, feetY, gridY = 0) {
+      const ground = gridY + this.sample(x, z);
+      const surface = gridY + WATER_LEVEL;
+      if (ground >= surface - 0.1) return false;
+      return feetY < surface - 0.15;
+    },
+
+    waterSurfaceY() {
+      return WATER_LEVEL;
+    },
+
+    buildHeightfield(res, size) {
+      this.res = res;
+      this.size = size;
+      const n = (res + 1) * (res + 1);
+      this.heights = new Float32Array(n);
+      for (let iz = 0; iz <= res; iz++) {
+        for (let ix = 0; ix <= res; ix++) {
+          const x = (ix / res) * size;
+          const z = (iz / res) * size;
+          this.heights[iz * (res + 1) + ix] = terrainHeightRaw(x, z);
+        }
+      }
+    },
+
+    vertexColor(h, slope, underwater) {
+      if (underwater) return new THREE.Color(0x3a5a48);
+      if (h > 22) return new THREE.Color(0x9aa0a8).lerp(new THREE.Color(0xe8ecef), clamp((h - 22) / 14, 0, 1));
+      if (h > 14) return new THREE.Color(0x6a7068).lerp(new THREE.Color(0x9aa0a8), clamp((h - 14) / 8, 0, 1));
+      if (slope > 0.55) return new THREE.Color(0x7a7568);
+      if (h < WATER_LEVEL + 1.2) return new THREE.Color(0xc4b888).lerp(new THREE.Color(0x5a9a48), clamp((WATER_LEVEL + 1.2 - h) / 2, 0, 1));
+      if (h < 6) return new THREE.Color(0x4a8a38).lerp(new THREE.Color(0x6aaa50), fbm(h, slope, 1));
+      return new THREE.Color(0x4a8a38).lerp(new THREE.Color(0x3a7030), clamp((h - 6) / 10, 0, 1));
+    },
+
+    buildMeshes(group, gridY) {
+      this._disposeGroup(group);
+      this.staticColliders = [];
+      this.solidColliderMeshes = [];
+      const { res, size, heights } = this;
+
+      const geo = new THREE.PlaneGeometry(size, size, res, res);
+      geo.rotateX(-Math.PI / 2);
+      const pos = geo.attributes.position;
+      const colors = new Float32Array(pos.count * 3);
+
+      for (let i = 0; i < pos.count; i++) {
+        const lx = pos.getX(i) + size * 0.5;
+        const lz = pos.getZ(i) + size * 0.5;
+        const ix = Math.round((lx / size) * res);
+        const iz = Math.round((lz / size) * res);
+        const h = heights[iz * (res + 1) + ix];
+        pos.setY(i, gridY + h);
+
+        const hL = heights[iz * (res + 1) + clamp(ix - 1, 0, res)];
+        const hR = heights[iz * (res + 1) + clamp(ix + 1, 0, res)];
+        const hD = heights[clamp(iz - 1, 0, res) * (res + 1) + ix];
+        const hU = heights[clamp(iz + 1, 0, res) * (res + 1) + ix];
+        const slope = Math.hypot(hR - hL, hU - hD) * 0.35;
+        const uw = h < WATER_LEVEL - 0.1;
+        let c = this.vertexColor(h, slope, uw);
+        if (!uw && isIslandPlain(lx, lz)) {
+          c = new THREE.Color(0x4e9240).lerp(new THREE.Color(0x62a850), fbm(lx * 0.08, lz * 0.08, 1) * 0.35);
+        }
+        const ns = nanshanMask(lx, lz);
+        if (!uw && ns > 0.28) {
+          const tint = ns * ns;
+          const redSoil = new THREE.Color(0x6a3828).lerp(new THREE.Color(0x3d6a30), 0.55);
+          const goldJade = new THREE.Color(0x8a9048).lerp(new THREE.Color(0x48a878), fbm(lx * 0.2, lz * 0.2, 2));
+          c = c.lerp(redSoil.lerp(goldJade, tint * 0.7), tint * 0.75);
+          if (h > 8 && lx < ISLAND.cx - 10) c.lerp(new THREE.Color(0x9a8868), 0.35 * tint);
+        }
+        const km = kunlunMask(lx, lz);
+        if (!uw && km > 0.12) {
+          const kd = Math.hypot(lx - KUNLUN.cx, lz - KUNLUN.cz);
+          if (kd >= KUNLUN.weakWaterInner && kd <= KUNLUN.weakWaterOuter) {
+            c = new THREE.Color(0x060810).lerp(new THREE.Color(0x101820), km);
+          } else if (kd >= KUNLUN.fireRingInner && kd <= KUNLUN.fireRingOuter) {
+            c = new THREE.Color(0x1a1410).lerp(new THREE.Color(0x3a2820), 0.5 + fbm(lx, lz, 2) * 0.35);
+          } else if (h > 20) {
+            c = new THREE.Color(0xd0d4dc).lerp(new THREE.Color(0xf4f6fa), km);
+          } else if (kd < KUNLUN.craterRadius + 2) {
+            c = new THREE.Color(0x4a5058).lerp(new THREE.Color(0x6a7078), km * 0.6);
+          } else {
+            c = new THREE.Color(0x7a7870).lerp(new THREE.Color(0xa8a8a0), km * 0.7);
+          }
+        }
+        colors[i * 3] = c.r;
+        colors[i * 3 + 1] = c.g;
+        colors[i * 3 + 2] = c.b;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      geo.computeVertexNormals();
+
+      const terrain = new THREE.Mesh(
+        geo,
+        new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.02, flatShading: false }),
+      );
+      terrain.position.set(size * 0.5, 0, size * 0.5);
+      terrain.receiveShadow = true;
+      terrain.castShadow = false;
+      terrain.name = 'terrain';
+      group.add(terrain);
+
+      const waterVerts = [];
+      const waterIdx = [];
+      let vi = 0;
+      const surf = gridY + WATER_LEVEL;
+      const step = size / res;
+
+      for (let iz = 0; iz < res; iz++) {
+        for (let ix = 0; ix < res; ix++) {
+          const corners = [
+            [ix, iz], [ix + 1, iz], [ix + 1, iz + 1], [ix, iz + 1],
+          ].map(([ci, cj]) => {
+            const h = heights[cj * (res + 1) + ci];
+            const x = (ci / res) * size;
+            const z = (cj / res) * size;
+            return { x, z, h, uw: h < WATER_LEVEL - 0.1 };
+          });
+          if (!corners.some(c => c.uw)) continue;
+
+          for (const c of corners) {
+            waterVerts.push(c.x, surf, c.z);
+          }
+          waterIdx.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+          vi += 4;
+        }
+      }
+
+      if (waterVerts.length) {
+        const wGeo = new THREE.BufferGeometry();
+        wGeo.setAttribute('position', new THREE.Float32BufferAttribute(waterVerts, 3));
+        wGeo.setIndex(waterIdx);
+        wGeo.computeVertexNormals();
+        const water = new THREE.Mesh(
+          wGeo,
+          new THREE.MeshStandardMaterial({
+            color: 0x3a90c8,
+            transparent: true,
+            opacity: 0.62,
+            roughness: 0.15,
+            metalness: 0.05,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          }),
+        );
+        water.renderOrder = 2;
+        water.name = 'water';
+        group.add(water);
+      }
+
+      this._scatterNature(group, gridY);
+      this._buildNanshanRegion(group, gridY);
+      this._buildKunlunRegion(group, gridY);
+      this._buildFusang(group, gridY);
+    },
+
+    _makeNameSprite(text, hexColor = '#e8c878') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = hexColor;
+      ctx.font = 'bold 36px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, 128, 42);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const spr = new THREE.Sprite(mat);
+      spr.scale.set(12, 3, 1);
+      return spr;
+    },
+
+    _buildNanshanRegion(group, gridY) {
+      const nsGroup = new THREE.Group();
+      nsGroup.name = 'nanshan';
+      const { res, size, heights } = this;
+      const sampleY = (x, z) => gridY + this.sample(x, z);
+
+      const cassiaTrunk = new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.9 });
+      const cassiaLeaf = new THREE.MeshStandardMaterial({ color: 0x2a6040, roughness: 0.85 });
+      const miguTrunk = new THREE.MeshStandardMaterial({ color: 0x141018, roughness: 0.88 });
+      const miguGlow = new THREE.MeshStandardMaterial({ color: 0xffd860, emissive: 0xffc840, emissiveIntensity: 0.75, roughness: 0.35 });
+      const moss = new THREE.MeshStandardMaterial({ color: 0xc8b030, emissive: 0xffd840, emissiveIntensity: 0.28, roughness: 0.95 });
+      const jadeCrystal = new THREE.MeshStandardMaterial({ color: 0x58c8a0, emissive: 0x40a878, emissiveIntensity: 0.55, transparent: true, opacity: 0.88 });
+      const fallMat = new THREE.MeshStandardMaterial({ color: 0xb8f0ff, transparent: true, opacity: 0.5, roughness: 0.08, metalness: 0.04, side: THREE.DoubleSide, depthWrite: false });
+      const cliffRock = new THREE.MeshStandardMaterial({ color: 0x9a8868, metalness: 0.12, roughness: 0.78 });
+
+      const TREE_SIZE_MUL = 1.38;
+      const CONE_MUL = 2.55;
+      const cassias = [], cinnamons = [], coneTrees = [];
+      const expandedSpots = [];
+      for (const spot of NANSHAN_TREE_SPOTS) {
+        expandedSpots.push(spot);
+        const [tx, tz, kind, scale] = spot;
+        const jx = tx + (hash2(tx * 3.1, tz * 5.7) - 0.5) * 5.2;
+        const jz = tz + (hash2(tx * 11.3, tz * 2.9) - 0.5) * 5.2;
+        if (!isInNanshanTreeExcludeZone(jx, jz)) {
+          expandedSpots.push([jx, jz, kind, scale * (0.9 + hash2(jx, jz) * 0.18)]);
+        }
+      }
+      for (const spot of expandedSpots) {
+        const [tx, tz, kind, scale] = spot;
+        if (isInNanshanTreeExcludeZone(tx, tz)) continue;
+        const h = this.sample(tx, tz);
+        if (h < WATER_LEVEL + 0.35 || h > 24) continue;
+        const y = gridY + h;
+        const s = scale * TREE_SIZE_MUL;
+        const rot = hash2(tx * 19.3, tz * 13.7) * Math.PI * 2;
+        const tilt = (hash2(tx * 7.1, tz * 11.3) - 0.5) * 0.1;
+        if (kind === 'cassia') {
+          cassias.push({ x: tx, z: tz, y, s, rot, tilt });
+        } else if (kind === 'cinnamon') {
+          cinnamons.push({ x: tx, z: tz, y, s, rot, tilt });
+        } else {
+          coneTrees.push({ x: tx, z: tz, y, s });
+        }
+      }
+
+      const cinnamonTrunk = new THREE.MeshStandardMaterial({ color: 0x5a2818, roughness: 0.9 });
+      const cinnamonBark = new THREE.MeshStandardMaterial({ color: 0xd08050, roughness: 0.72, metalness: 0.06 });
+      const cinnamonInner = new THREE.MeshStandardMaterial({ color: 0xc86838, roughness: 0.65, emissive: 0x401808, emissiveIntensity: 0.08 });
+      const cinnamonLeaf = new THREE.MeshStandardMaterial({ color: 0x3d6848, roughness: 0.84 });
+      const cinnamonLeafTop = new THREE.MeshStandardMaterial({ color: 0x528858, roughness: 0.8 });
+      addCassiaInstanced(nsGroup, cassias, cassiaTrunk, cassiaLeaf);
+      addCinnamonInstanced(nsGroup, cinnamons, cinnamonTrunk, cinnamonBark, cinnamonInner, cinnamonLeaf, cinnamonLeafTop);
+      addInstanced(nsGroup, coneTrees, 0x2a6830, 'cone', CONE_MUL);
+
+      const jadeVeinMat = new THREE.MeshStandardMaterial({
+        color: 0x68e8b0, emissive: 0x48d898, emissiveIntensity: 1.15,
+        roughness: 0.25, metalness: 0.12,
+      });
+      let innerJadeCount = 0;
+      for (let attempt = 0; attempt < 80 && innerJadeCount < 14; attempt++) {
+        const jx = NANSHAN.cx + (hash2(attempt, 701) - 0.5) * 26;
+        const jz = NANSHAN.cz + 2 + (hash2(attempt, 702) - 0.5) * 24;
+        if (!isInNanshanValleyFloor(jx, jz)) continue;
+        const groundY = sampleY(jx, jz);
+        if (groundY > gridY + 13) continue;
+
+        const rockGroup = new THREE.Group();
+        rockGroup.position.set(jx, groundY, jz);
+        rockGroup.rotation.y = hash2(attempt, 703) * 6.28;
+        const boulderCount = 1 + Math.floor(hash2(attempt, 704) * 2);
+        for (let b = 0; b < boulderCount; b++) {
+          const rockR = 0.38 + hash2(attempt, b) * 0.48;
+          const rx = (hash2(b, attempt) - 0.5) * 1.2;
+          const rz = (hash2(b + 3, attempt) - 0.5) * 1.2;
+          const ry = rockR * 0.55;
+          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rockR, 0), cliffRock);
+          rock.position.set(rx, ry, rz);
+          rock.rotation.set(hash2(b, 1) * 0.8, hash2(b, 2) * 1.2, hash2(b, 3) * 0.6);
+          rockGroup.add(rock);
+
+          const outA = hash2(b, 8) * Math.PI * 2;
+          const outTilt = 0.3 + hash2(b, 10) * 0.55;
+          const veinR = 0.24 + hash2(b, attempt) * 0.2;
+          const vein = new THREE.Mesh(new THREE.OctahedronGeometry(veinR, 0), jadeVeinMat);
+          vein.position.set(
+            rx + Math.cos(outA) * rockR * 1.05,
+            ry + rockR * 0.2 + Math.sin(outTilt) * rockR * 0.6,
+            rz + Math.sin(outA) * rockR * 1.05,
+          );
+          vein.rotation.set(outTilt, outA, hash2(b, 7) * 0.8);
+          vein.scale.set(1.2, 1.4, 1.2);
+          rockGroup.add(vein);
+        }
+        nsGroup.add(rockGroup);
+        innerJadeCount++;
+      }
+
+      const wfY = sampleY(NANSHAN.waterfallX, NANSHAN.waterfallZ);
+      const wfGroup = new THREE.Group();
+      wfGroup.position.set(NANSHAN.waterfallX, wfY, NANSHAN.waterfallZ);
+      let pillarStack = 0;
+      for (let i = 0; i < 5; i++) {
+        const sx = 2.2 + (i % 2);
+        const sy = 3.5 + i * 0.8;
+        const sz = 1.6;
+        const lx = -1.8 - i * 0.3;
+        const lz = (i - 2) * 0.7;
+        const ly = pillarStack + sy * 0.5;
+        pillarStack += sy * 0.72;
+        const rock = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), cliffRock);
+        rock.position.set(lx, ly, lz);
+        rock.rotation.set(0.1, 0.25 + i * 0.08, 0.15);
+        wfGroup.add(rock);
+        this.solidColliderMeshes.push(rock);
+      }
+      for (let tier = 0; tier < 3; tier++) {
+        const sheet = new THREE.Mesh(new THREE.PlaneGeometry(2.8 - tier * 0.4, 4.5 - tier * 0.8), fallMat);
+        sheet.position.set(-1.2 - tier * 0.35, 5.5 - tier * 1.6, tier * 0.4);
+        sheet.rotation.y = 0.32 + tier * 0.05;
+        wfGroup.add(sheet);
+      }
+      const basin = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.2, 3.6, 0.45, 20),
+        new THREE.MeshStandardMaterial({ color: 0x3a8898, roughness: 0.18, metalness: 0.08 }),
+      );
+      basin.position.set(-1.2, 0.2, 1.2);
+      wfGroup.add(basin);
+      const pool = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.6, 2.9, 0.18, 16),
+        new THREE.MeshStandardMaterial({ color: 0x48b8c8, transparent: true, opacity: 0.7, roughness: 0.1 }),
+      );
+      pool.position.set(-1.2, 0.48, 1.2);
+      wfGroup.add(pool);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(2.75, 0.12, 6, 20), cliffRock);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.set(-1.2, 0.52, 1.2);
+      wfGroup.add(rim);
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2;
+        const boulder = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35 + (i % 3) * 0.12, 0), cliffRock);
+        boulder.position.set(-1.2 + Math.cos(ang) * 3.4, 0.35, 1.2 + Math.sin(ang) * 2.6);
+        wfGroup.add(boulder);
+      }
+      nsGroup.add(wfGroup);
+
+      const riverMat = new THREE.MeshStandardMaterial({
+        color: 0x58c8e8, transparent: true, opacity: 0.45, roughness: 0.1, depthWrite: false,
+      });
+      const riverSteps = 10;
+      for (let i = 0; i < riverSteps; i++) {
+        const t0 = i / riverSteps;
+        const t1 = (i + 1) / riverSteps;
+        const ax = lerp(NANSHAN.peakX, NANSHAN.riverMouthX, t0);
+        const az = lerp(NANSHAN.peakZ, NANSHAN.riverMouthZ, t0);
+        const bx = lerp(NANSHAN.peakX, NANSHAN.riverMouthX, t1);
+        const bz = lerp(NANSHAN.peakZ, NANSHAN.riverMouthZ, t1);
+        const mx = (ax + bx) * 0.5;
+        const mz = (az + bz) * 0.5;
+        const segLen = Math.hypot(bx - ax, bz - az);
+        const ry = gridY + WATER_LEVEL - 0.15;
+        const ripple = new THREE.Mesh(new THREE.BoxGeometry(segLen, 0.08, 3.8), riverMat);
+        ripple.position.set(mx, ry, mz);
+        ripple.rotation.y = Math.atan2(bx - ax, bz - az);
+        ripple.renderOrder = 3;
+        nsGroup.add(ripple);
+      }
+
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI + 0.2;
+        const cx = ISLAND.cx - 36 - i * 3;
+        const cz = NANSHAN.cz + 10 + Math.sin(ang) * 14;
+        const ch = sampleY(cx, cz);
+        if (ch < gridY + WATER_LEVEL + 1) continue;
+        const cliff = new THREE.Mesh(new THREE.BoxGeometry(4.5, 6 + (i % 2) * 3, 2.4), cliffRock);
+        cliff.position.set(cx, ch + 3, cz);
+        cliff.rotation.y = 0.5;
+        nsGroup.add(cliff);
+        const mossPatch = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 6), moss);
+        mossPatch.scale.y = 0.25;
+        mossPatch.position.set(cx + 1, ch + 2, cz);
+        nsGroup.add(mossPatch);
+      }
+
+      group.add(nsGroup);
+    },
+
+    _buildKunlunRegion(group, gridY) {
+      const klGroup = new THREE.Group();
+      klGroup.name = 'kunlun';
+      const sampleY = (x, z) => gridY + this.sample(x, z);
+      const { cx, cz } = KUNLUN;
+      const surfY = gridY + KUNLUN.weakWaterLevel;
+
+      const blackWater = new THREE.MeshStandardMaterial({
+        color: 0x020406, transparent: true, opacity: 0.94, roughness: 0.04, metalness: 0.45, depthWrite: false,
+      });
+      const blackWaterDeep = new THREE.MeshStandardMaterial({
+        color: 0x000204, transparent: true, opacity: 0.88, roughness: 0.02, metalness: 0.55, depthWrite: false,
+      });
+      const waterSurface = new THREE.Mesh(
+        new THREE.RingGeometry(KUNLUN.weakWaterInner, KUNLUN.weakWaterOuter, 72),
+        blackWater,
+      );
+      waterSurface.rotation.x = -Math.PI / 2;
+      waterSurface.position.set(cx, surfY, cz);
+      waterSurface.renderOrder = 4;
+      klGroup.add(waterSurface);
+
+      const waterDepth = new THREE.Mesh(
+        new THREE.CylinderGeometry(KUNLUN.weakWaterOuter, KUNLUN.weakWaterOuter + 1.5, 2.4, 72, 1, true),
+        blackWaterDeep,
+      );
+      waterDepth.position.set(cx, surfY - 1.1, cz);
+      waterDepth.renderOrder = 3;
+      klGroup.add(waterDepth);
+
+      for (let i = 0; i < 48; i++) {
+        const ang = (i / 48) * Math.PI * 2;
+        const ang2 = ((i + 1) / 48) * Math.PI * 2;
+        const rIn = KUNLUN.weakWaterInner + 0.5;
+        const rOut = KUNLUN.weakWaterOuter - 0.5;
+        const mx = cx + Math.cos((ang + ang2) * 0.5) * (rIn + rOut) * 0.5;
+        const mz = cz + Math.sin((ang + ang2) * 0.5) * (rIn + rOut) * 0.5;
+        const bankY = sampleY(mx, mz);
+        const ripple = new THREE.Mesh(
+          new THREE.BoxGeometry(3.8, 0.06, 1.6),
+          new THREE.MeshStandardMaterial({ color: 0x080c10, transparent: true, opacity: 0.7, roughness: 0.1 }),
+        );
+        ripple.position.set(mx, Math.max(surfY - 0.08, bankY + 0.15), mz);
+        ripple.rotation.y = (ang + ang2) * 0.5 + Math.PI / 2;
+        ripple.renderOrder = 5;
+        klGroup.add(ripple);
+      }
+
+      const basalt = new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.96, metalness: 0.04 });
+      const basaltDark = new THREE.MeshStandardMaterial({ color: 0x141010, roughness: 0.98 });
+      const lavaCrust = new THREE.MeshStandardMaterial({
+        color: 0x0a0404, emissive: 0x6a1200, emissiveIntensity: 0.38, roughness: 0.88,
+      });
+      const lavaGlow = new THREE.MeshStandardMaterial({
+        color: 0x280808, emissive: 0xcc2800, emissiveIntensity: 0.72, roughness: 0.55,
+      });
+      const smokeMat = new THREE.MeshStandardMaterial({
+        color: 0x282420, transparent: true, opacity: 0.28, roughness: 1, depthWrite: false,
+      });
+
+      const buildVolcano = (fx, fz, seed) => {
+        const fy = sampleY(fx, fz);
+        const root = new THREE.Group();
+        root.position.set(fx, fy, fz);
+        root.rotation.y = hash2(seed, 77) * Math.PI * 2;
+
+        for (let b = 0; b < 11; b++) {
+          const ang = (b / 11) * Math.PI * 2 + hash2(seed, b) * 0.6;
+          const rad = 2.5 + hash2(b, seed + 3) * 2.8;
+          const rock = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(1.6 + hash2(b, seed + 1) * 1.4, 0),
+            hash2(b, seed + 2) > 0.5 ? basalt : basaltDark,
+          );
+          rock.position.set(Math.cos(ang) * rad, 1.8 + b * 0.9, Math.sin(ang) * rad);
+          rock.rotation.set(hash2(b, 1) * 0.9, hash2(b, 2) * 1.4, hash2(b, 3) * 0.7);
+          rock.castShadow = true;
+          root.add(rock);
+        }
+
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(6.5, 13, 12, 1, true), basaltDark);
+        cone.position.y = 6.5;
+        cone.castShadow = true;
+        root.add(cone);
+
+        const rim = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.75, 8, 20), basalt);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = 12.2;
+        root.add(rim);
+
+        const lavaPool = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 0.28, 18), lavaCrust);
+        lavaPool.position.y = 11.85;
+        root.add(lavaPool);
+
+        for (let c = 0; c < 7; c++) {
+          const crack = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 2.2 + hash2(c, seed) * 1.2), lavaGlow);
+          crack.rotation.y = (c / 7) * Math.PI * 2 + hash2(c, seed + 5) * 0.4;
+          crack.position.y = 12.0;
+          root.add(crack);
+        }
+
+        for (let s = 0; s < 3; s++) {
+          const smoke = new THREE.Mesh(new THREE.ConeGeometry(1.4 - s * 0.3, 3.5 + s * 1.5, 7), smokeMat);
+          smoke.position.y = 14 + s * 2.2;
+          smoke.scale.set(1 + s * 0.35, 1, 1 + s * 0.35);
+          root.add(smoke);
+        }
+
+        const slag = new THREE.Mesh(new THREE.SphereGeometry(0.9, 7, 5), basalt);
+        slag.scale.set(1.8, 0.35, 1.4);
+        slag.position.set(2.2, 0.3, 1.6);
+        slag.rotation.y = 0.8;
+        root.add(slag);
+
+        klGroup.add(root);
+      };
+
+      for (let i = 0; i < 14; i++) {
+        const ang = (i / 14) * Math.PI * 2 + hash2(i, 801) * 0.35;
+        const rd = lerp(KUNLUN.fireRingInner + 4, KUNLUN.fireRingOuter - 5, hash2(i, 802));
+        buildVolcano(cx + Math.cos(ang) * rd, cz + Math.sin(ang) * rd, i * 17 + 801);
+      }
+
+      const jadeTrunk = new THREE.MeshStandardMaterial({ color: 0x486858, roughness: 0.35, metalness: 0.18 });
+      const jadeBark = new THREE.MeshStandardMaterial({
+        color: 0x688878, emissive: 0x284838, emissiveIntensity: 0.15, roughness: 0.42, metalness: 0.22,
+      });
+      const jadeLeaf = new THREE.MeshStandardMaterial({
+        color: 0xa8d8b8, emissive: 0x58a878, emissiveIntensity: 0.35, roughness: 0.55,
+      });
+      const jadeFruit = new THREE.MeshStandardMaterial({
+        color: 0xffe880, emissive: 0xffc040, emissiveIntensity: 0.65, roughness: 0.35,
+      });
+
+      const buildKunlunTree = (tx, tz, seed) => {
+        const ty = sampleY(tx, tz);
+        if (ty < gridY + 8) return;
+        const tree = new THREE.Group();
+        tree.position.set(tx, ty, tz);
+        tree.rotation.y = hash2(seed, 31) * Math.PI * 2;
+        const sc = 0.85 + hash2(seed, 32) * 0.45;
+
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * sc, 0.38 * sc, 3.2 * sc, 8), jadeTrunk);
+        trunk.position.y = 1.6 * sc;
+        trunk.rotation.z = (hash2(seed, 33) - 0.5) * 0.18;
+        tree.add(trunk);
+
+        const twist = new THREE.Mesh(new THREE.TorusGeometry(0.28 * sc, 0.06 * sc, 5, 10), jadeBark);
+        twist.rotation.x = Math.PI / 2;
+        twist.position.y = 2.4 * sc;
+        tree.add(twist);
+
+        for (let b = 0; b < 4; b++) {
+          const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * sc, 0.1 * sc, 1.4 * sc, 6), jadeBark);
+          branch.position.set((b % 2 ? 1 : -1) * 0.35 * sc, 2.6 * sc + b * 0.3 * sc, (b < 2 ? 1 : -1) * 0.2 * sc);
+          branch.rotation.set(0.5 + b * 0.15, b * 0.8, (b % 2 ? 0.4 : -0.4));
+          tree.add(branch);
+          const pad = new THREE.Mesh(new THREE.SphereGeometry(0.55 * sc, 8, 6), jadeLeaf);
+          pad.scale.set(1.2, 0.45, 1.1);
+          pad.position.copy(branch.position);
+          pad.position.y += 0.55 * sc;
+          tree.add(pad);
+          if (b % 2 === 0) {
+            const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.12 * sc, 6, 5), jadeFruit);
+            fruit.position.copy(pad.position);
+            fruit.position.y += 0.15 * sc;
+            tree.add(fruit);
+          }
+        }
+
+        const crown = new THREE.Mesh(new THREE.SphereGeometry(0.85 * sc, 10, 8), jadeLeaf);
+        crown.scale.set(1.1, 0.55, 1.05);
+        crown.position.y = 3.8 * sc;
+        tree.add(crown);
+
+        klGroup.add(tree);
+      };
+
+      for (let i = 0; i < 22; i++) {
+        const ang = hash2(i, 911) * Math.PI * 2;
+        const rd = lerp(KUNLUN.weakWaterOuter + 4, KUNLUN.fireRingInner - 6, hash2(i, 912));
+        buildKunlunTree(cx + Math.cos(ang) * rd, cz + Math.sin(ang) * rd, i + 900);
+      }
+
+      const peakY = sampleY(KUNLUN.peakX, KUNLUN.peakZ);
+      const chamberY = sampleY(KUNLUN.xiwangmuX, KUNLUN.xiwangmuZ);
+      const chamberDepth = Math.max(8, peakY - chamberY);
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x6a7078, roughness: 0.88, metalness: 0.06 });
+      const rockDark = new THREE.MeshStandardMaterial({ color: 0x3a4048, roughness: 0.94 });
+      const jadeGlow = new THREE.MeshStandardMaterial({
+        color: 0x88c8a8, emissive: 0x48a878, emissiveIntensity: 0.55, roughness: 0.3,
+      });
+
+      const crater = new THREE.Group();
+      crater.position.set(KUNLUN.peakX, peakY - 1, KUNLUN.peakZ);
+
+      for (let i = 0; i < 20; i++) {
+        const ang = (i / 20) * Math.PI * 2;
+        const rimR = 11 + (i % 3) * 0.6;
+        const rock = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(1.8 + (i % 4) * 0.5, 0),
+          i % 2 ? rockMat : rockDark,
+        );
+        rock.position.set(Math.cos(ang) * rimR, 2.5 + (i % 2) * 1.2, Math.sin(ang) * rimR);
+        rock.rotation.set(hash2(i, 1) * 0.8, ang, hash2(i, 2) * 0.5);
+        rock.castShadow = true;
+        crater.add(rock);
+      }
+
+      const pitWall = new THREE.Mesh(
+        new THREE.CylinderGeometry(10, 6.5, chamberDepth, 24, 1, true),
+        rockDark,
+      );
+      pitWall.position.y = -chamberDepth * 0.5;
+      crater.add(pitWall);
+
+      const pitFloor = new THREE.Mesh(
+        new THREE.CylinderGeometry(6.5, 6.5, 0.5, 20),
+        new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.92 }),
+      );
+      pitFloor.position.y = -chamberDepth + 0.25;
+      crater.add(pitFloor);
+
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        const vein = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.5, 0.15), jadeGlow);
+        vein.position.set(Math.cos(ang) * 4.5, -chamberDepth * 0.55, Math.sin(ang) * 4.5);
+        vein.rotation.z = 0.2;
+        crater.add(vein);
+      }
+
+      const chamberLight = new THREE.Mesh(
+        new THREE.CylinderGeometry(5, 5.5, 0.08, 20),
+        new THREE.MeshStandardMaterial({
+          color: 0x608878, emissive: 0x408860, emissiveIntensity: 0.4, transparent: true, opacity: 0.6,
+        }),
+      );
+      chamberLight.position.y = -chamberDepth + 0.4;
+      crater.add(chamberLight);
+
+      klGroup.add(crater);
+
+      const sandMat = new THREE.MeshStandardMaterial({ color: 0xb8a878, roughness: 0.96 });
+      for (let i = 0; i < 10; i++) {
+        const sx = cx - 16 - i * 4 + hash2(i, 901) * 12;
+        const sz = cz + (hash2(i, 902) - 0.5) * 52;
+        const sy = sampleY(sx, sz);
+        const dune = new THREE.Mesh(new THREE.SphereGeometry(4 + hash2(i, 903) * 3, 8, 6), sandMat);
+        dune.scale.y = 0.32;
+        dune.position.set(sx, sy + 0.5, sz);
+        klGroup.add(dune);
+      }
+
+      const snowMat = new THREE.MeshStandardMaterial({ color: 0xe8ecf0, roughness: 0.82 });
+      for (let i = 0; i < 8; i++) {
+        const ang = (i / 8) * Math.PI * 2 + 0.3;
+        const sr = 6 + (i % 3) * 2;
+        const sx = KUNLUN.peakX + Math.cos(ang) * sr;
+        const sz = KUNLUN.peakZ + Math.sin(ang) * sr;
+        const sy = sampleY(sx, sz);
+        const patch = new THREE.Mesh(new THREE.SphereGeometry(2.5, 8, 6), snowMat);
+        patch.scale.y = 0.25;
+        patch.position.set(sx, sy + 0.3, sz);
+        klGroup.add(patch);
+      }
+
+      const peakGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(10, 14, 12),
+        new THREE.MeshStandardMaterial({
+          color: 0xe0e8f0, emissive: 0xb0c8e8, emissiveIntensity: 0.28, transparent: true, opacity: 0.22,
+        }),
+      );
+      peakGlow.scale.y = 0.45;
+      peakGlow.position.set(KUNLUN.peakX, peakY + 14, KUNLUN.peakZ);
+      klGroup.add(peakGlow);
+
+      group.add(klGroup);
+    },
+
+    _buildFusang(group, gridY) {
+      const { cx, cz, poolRadius } = FUSANG;
+      const surf = gridY + WATER_LEVEL;
+      const poolMat = new THREE.MeshStandardMaterial({
+        color: 0x48a8c8, transparent: true, opacity: 0.62, roughness: 0.1, metalness: 0.05, depthWrite: false,
+      });
+      const pool = new THREE.Mesh(new THREE.CylinderGeometry(poolRadius, poolRadius * 1.02, 0.12, 48), poolMat);
+      pool.position.set(cx, surf - 0.06, cz);
+      pool.renderOrder = 3;
+      group.add(pool);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(poolRadius * 0.98, 0.35, 8, 48), new THREE.MeshStandardMaterial({
+        color: 0x8a8070, roughness: 0.88,
+      }));
+      rim.rotation.x = Math.PI / 2;
+      rim.position.set(cx, surf + 0.05, cz);
+      group.add(rim);
+
+      const root = new THREE.Group();
+      root.name = 'fusang';
+      root.position.set(cx, surf - 0.35, cz);
+
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2e20, roughness: 0.92 });
+      const barkMat = new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.9 });
+      const leafMat = new THREE.MeshStandardMaterial({ color: 0x1f5c28, roughness: 0.86 });
+      const leafLight = new THREE.MeshStandardMaterial({ color: 0x3a8040, roughness: 0.84 });
+      const rootMat = new THREE.MeshStandardMaterial({ color: 0x352818, roughness: 0.93 });
+
+      for (let i = 0; i < 5; i++) {
+        const ang = (i / 5) * Math.PI * 2 + 0.2;
+        const buttress = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 5.5, 14, 10), barkMat);
+        buttress.position.set(Math.cos(ang) * 7, 7, Math.sin(ang) * 7);
+        buttress.rotation.set(0.15, ang, 0.45);
+        buttress.castShadow = true;
+        root.add(buttress);
+      }
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(6, 10, 42, 16), trunkMat);
+      trunk.position.set(0, 21, 0);
+      trunk.castShadow = true;
+      root.add(trunk);
+
+      const trunk2 = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 7, 18, 14), barkMat);
+      trunk2.position.set(3, 38, -2);
+      trunk2.rotation.z = 0.12;
+      trunk2.castShadow = true;
+      root.add(trunk2);
+
+      const crownY = 46;
+      const mainCanopy = new THREE.Mesh(new THREE.SphereGeometry(30, 20, 16), leafMat);
+      mainCanopy.scale.set(1.2, 0.38, 1.15);
+      mainCanopy.position.set(0, crownY, 0);
+      mainCanopy.castShadow = true;
+      root.add(mainCanopy);
+
+      const upperCanopy = new THREE.Mesh(new THREE.SphereGeometry(18, 16, 12), leafLight);
+      upperCanopy.scale.set(1, 0.5, 1);
+      upperCanopy.position.set(0, crownY + 6, 0);
+      upperCanopy.castShadow = true;
+      root.add(upperCanopy);
+
+      for (let i = 0; i < 10; i++) {
+        const ang = (i / 10) * Math.PI * 2;
+        const dist = 20 + (i % 3) * 4;
+        const lobe = new THREE.Mesh(new THREE.SphereGeometry(14, 14, 10), i % 2 ? leafLight : leafMat);
+        lobe.scale.set(1.15, 0.45, 1.05);
+        lobe.position.set(Math.cos(ang) * dist, crownY - 4, Math.sin(ang) * dist);
+        lobe.castShadow = true;
+        root.add(lobe);
+      }
+
+      for (let i = 0; i < 18; i++) {
+        const ang = (i / 18) * Math.PI * 2 + 0.08;
+        const rad = 14 + (i % 4) * 5;
+        const lx = Math.cos(ang) * rad;
+        const lz = Math.sin(ang) * rad;
+        const footH = this.sample(cx + lx, cz + lz);
+        const footY = footH - (WATER_LEVEL - 0.35);
+        const attachY = crownY - 8 - (i % 3) * 2;
+        const hangLen = attachY - footY;
+        if (hangLen < 2.5) continue;
+        const hang = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.65, hangLen, 6), rootMat);
+        hang.position.set(lx, footY + hangLen * 0.5, lz);
+        const lean = Math.atan2(Math.hypot(lx, lz), hangLen) * 0.35;
+        hang.rotation.x = -Math.sin(ang) * lean;
+        hang.rotation.z = Math.cos(ang) * lean;
+        hang.castShadow = true;
+        root.add(hang);
+      }
+
+      const label = this._makeNameSprite('扶桑', '#ffd080');
+      label.position.set(0, crownY + 22, 0);
+      label.scale.set(16, 4, 1);
+      root.add(label);
+
+      group.add(root);
+    },
+
+    _scatterNature(group, gridY) {
+      const { res, size, heights } = this;
+      const trees = [], rocks = [];
+      for (let iz = 2; iz < res - 2; iz += 2) {
+        for (let ix = 2; ix < res - 2; ix += 2) {
+          const h = heights[iz * (res + 1) + ix];
+          if (h < WATER_LEVEL + 0.8 || h > 20) continue;
+          const hL = heights[iz * (res + 1) + ix - 1];
+          const hR = heights[iz * (res + 1) + ix + 1];
+          const slope = Math.abs(hR - hL);
+          if (slope > 1.8) continue;
+          const x = (ix / res) * size + (hash2(ix, iz) - 0.5) * stepJitter(size, res);
+          const z = (iz / res) * size + (hash2(ix + 99, iz + 77) - 0.5) * stepJitter(size, res);
+          let nearIsleMt = false;
+          for (const m of ISLAND_MOUNTAINS) {
+            if (Math.hypot(x - m.cx, z - m.cz) < m.spread * 0.75) { nearIsleMt = true; break; }
+          }
+          if (nearIsleMt) continue;
+          if (isInNanshan(x, z)) continue;
+          if (Math.hypot(x - FUSANG.cx, z - FUSANG.cz) < FUSANG.poolRadius * 1.05) continue;
+          const onPlain = isIslandPlain(x, z);
+          const r = hash2(ix * 3, iz * 5);
+          if (onPlain) {
+            if (r < 0.04) rocks.push({ x, z, y: gridY + h, s: 0.3 + r * 0.8 });
+            continue;
+          }
+          if (r < 0.22) rocks.push({ x, z, y: gridY + h, s: 0.4 + r * 1.2 });
+          else if (r < 0.48 && h < 12) trees.push({ x, z, y: gridY + h, s: 0.7 + r * 0.9 });
+        }
+      }
+      addInstanced(group, trees, 0x2a6830, 'cone', 1.8);
+      addInstanced(group, rocks, 0x6a6860, 'dodeca', 1);
+    },
+
+    _disposeGroup(group) {
+      while (group.children.length) {
+        const c = group.children[0];
+        group.remove(c);
+        c.traverse?.(o => {
+          o.geometry?.dispose();
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+        });
+      }
+    },
+  };
+
+  function stepJitter(size, res) { return (size / res) * 0.85; }
+
+  function addLimbSegment(parent, rTop, rBot, len, mat, yOff = -len * 0.5) {
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, len, 14), mat);
+    seg.position.y = yOff;
+    seg.castShadow = true;
+    parent.add(seg);
+    const capT = new THREE.Mesh(new THREE.SphereGeometry(rTop * 0.92, 12, 10), mat);
+    capT.position.y = yOff + len * 0.5;
+    parent.add(capT);
+    const capB = new THREE.Mesh(new THREE.SphereGeometry(rBot * 0.9, 12, 10), mat);
+    capB.position.y = yOff - len * 0.5;
+    parent.add(capB);
+    return seg;
+  }
+
+  const XingtianNPC = {
+    spawn(group, gridY, sampleHeight) {
+      const ground = sampleHeight(XINGTIAN.x, XINGTIAN.z);
+      const root = new THREE.Group();
+      root.name = 'xingtian';
+      root.position.set(XINGTIAN.x, gridY + ground, XINGTIAN.z);
+
+      const bronze = new THREE.MeshStandardMaterial({
+        color: 0x6a5048, roughness: 0.48, metalness: 0.52,
+        emissive: 0x2a1008, emissiveIntensity: 0.06,
+      });
+      const bronzeDark = new THREE.MeshStandardMaterial({
+        color: 0x4a3832, roughness: 0.42, metalness: 0.58,
+      });
+      const scarMat = new THREE.MeshStandardMaterial({
+        color: 0x7a2810, emissive: 0xff4400, emissiveIntensity: 0.55, roughness: 0.38,
+      });
+      const eyeMat = new THREE.MeshStandardMaterial({
+        color: 0xffc040, emissive: 0xff9000, emissiveIntensity: 1.2, roughness: 0.2, metalness: 0.15,
+      });
+      const bellyMouth = new THREE.MeshStandardMaterial({ color: 0x180808, roughness: 0.85, metalness: 0.1 });
+      const jade = new THREE.MeshStandardMaterial({ color: 0x1e4840, roughness: 0.28, metalness: 0.35 });
+      const jadeRim = new THREE.MeshStandardMaterial({ color: 0x8a7050, roughness: 0.35, metalness: 0.55 });
+      const axeBlade = new THREE.MeshStandardMaterial({ color: 0x4a5868, metalness: 0.72, roughness: 0.22 });
+      const wood = new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.72, metalness: 0.08 });
+      const leather = new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.8, metalness: 0.05 });
+
+      const hips = new THREE.Group();
+      hips.position.y = 1.55;
+      root.add(hips);
+
+      const pelvis = new THREE.Mesh(new THREE.SphereGeometry(1.35, 16, 12), bronze);
+      pelvis.scale.set(1.5, 0.72, 1.1);
+      pelvis.position.y = 0.15;
+      pelvis.castShadow = true;
+      hips.add(pelvis);
+
+      const torso = new THREE.Group();
+      torso.position.y = 0.85;
+      hips.add(torso);
+
+      const abdomen = new THREE.Mesh(new THREE.SphereGeometry(1.45, 16, 14), bronze);
+      abdomen.scale.set(1.35, 1.1, 0.95);
+      abdomen.position.y = 0.55;
+      abdomen.castShadow = true;
+      torso.add(abdomen);
+
+      const chest = new THREE.Mesh(new THREE.SphereGeometry(1.55, 16, 14), bronze);
+      chest.scale.set(1.55, 1.15, 1.05);
+      chest.position.y = 2.05;
+      chest.castShadow = true;
+      torso.add(chest);
+
+      const shoulderL = new THREE.Mesh(new THREE.SphereGeometry(0.72, 12, 10), bronzeDark);
+      shoulderL.position.set(-1.95, 2.55, 0);
+      shoulderL.castShadow = true;
+      torso.add(shoulderL);
+      const shoulderR = shoulderL.clone();
+      shoulderR.position.x = 1.95;
+      torso.add(shoulderR);
+
+      const neckScar = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.06, 16), scarMat);
+      neckScar.position.y = 2.88;
+      torso.add(neckScar);
+
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), eyeMat);
+      eyeL.position.set(-0.62, 2.15, 1.05);
+      torso.add(eyeL);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.62;
+      torso.add(eyeR);
+
+      const mouth = new THREE.Group();
+      mouth.position.set(0, 0.35, 0.92);
+      torso.add(mouth);
+      const mouthSlit = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 0.18), bellyMouth);
+      mouth.add(mouthSlit);
+      const lipT = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.06, 6, 14, Math.PI), bronzeDark);
+      lipT.rotation.x = Math.PI;
+      lipT.position.y = 0.12;
+      mouth.add(lipT);
+      const lipB = lipT.clone();
+      lipB.rotation.x = 0;
+      lipB.position.y = -0.12;
+      mouth.add(lipB);
+
+      for (let i = 0; i < 5; i++) {
+        const scar = new THREE.Mesh(new THREE.TorusGeometry(0.18 + (i % 2) * 0.06, 0.04, 6, 12), scarMat);
+        scar.position.set((i - 2) * 0.42, 1.55 + (i % 2) * 0.35, 0.98);
+        scar.rotation.x = Math.PI / 2;
+        torso.add(scar);
+      }
+
+      const armL = new THREE.Group();
+      armL.position.set(-2.15, 2.45, 0);
+      hips.add(armL);
+      addLimbSegment(armL, 0.62, 0.78, 2.35, bronze, -1.18);
+      const elbowL = new THREE.Mesh(new THREE.SphereGeometry(0.58, 12, 10), bronzeDark);
+      elbowL.position.y = -2.35;
+      armL.add(elbowL);
+      const foreL = new THREE.Group();
+      foreL.position.y = -2.35;
+      armL.add(foreL);
+      addLimbSegment(foreL, 0.52, 0.42, 2.15, bronze, -1.08);
+      const handL = new THREE.Mesh(new THREE.SphereGeometry(0.48, 10, 8), bronzeDark);
+      handL.scale.set(0.9, 0.65, 0.75);
+      handL.position.set(0, -2.2, 0.15);
+      foreL.add(handL);
+
+      const shield = new THREE.Group();
+      shield.position.set(-0.15, -2.05, 0.62);
+      foreL.add(shield);
+      const shieldFace = new THREE.Mesh(new THREE.CylinderGeometry(1.85, 1.85, 0.22, 24), jade);
+      shieldFace.rotation.x = Math.PI / 2;
+      shield.add(shieldFace);
+      const shieldRim = new THREE.Mesh(new THREE.TorusGeometry(1.72, 0.1, 8, 28), jadeRim);
+      shieldRim.rotation.x = Math.PI / 2;
+      shield.add(shieldRim);
+      const boss = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), bronze);
+      boss.position.z = 0.14;
+      shield.add(boss);
+      for (let i = 0; i < 6; i++) {
+        const stud = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), jadeRim);
+        const a = (i / 6) * Math.PI * 2;
+        stud.position.set(Math.cos(a) * 1.35, Math.sin(a) * 1.35, 0.08);
+        shield.add(stud);
+      }
+
+      const armR = new THREE.Group();
+      armR.position.set(2.15, 2.45, 0);
+      hips.add(armR);
+      addLimbSegment(armR, 0.62, 0.78, 2.35, bronze, -1.18);
+      const elbowR = new THREE.Mesh(new THREE.SphereGeometry(0.58, 12, 10), bronzeDark);
+      elbowR.position.y = -2.35;
+      armR.add(elbowR);
+      const foreR = new THREE.Group();
+      foreR.position.y = -2.35;
+      armR.add(foreR);
+      addLimbSegment(foreR, 0.52, 0.42, 2.15, bronze, -1.08);
+      const handR = new THREE.Mesh(new THREE.SphereGeometry(0.48, 10, 8), bronzeDark);
+      handR.scale.set(0.9, 0.65, 0.75);
+      handR.position.set(0, -2.2, 0.12);
+      foreR.add(handR);
+
+      const axe = new THREE.Group();
+      axe.position.set(0.08, -2.05, 0.45);
+      foreR.add(axe);
+      const axeHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 3.2, 10), wood);
+      axeHandle.rotation.z = 0.32;
+      axeHandle.position.y = -0.45;
+      axe.add(axeHandle);
+      const grip = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.04, 6, 10), leather);
+      grip.rotation.x = Math.PI / 2;
+      grip.position.y = -0.2;
+      axe.add(grip);
+      const axeHead = new THREE.Group();
+      axeHead.position.set(0.75, 1.05, 0);
+      axe.add(axeHead);
+      const blade1 = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.42, 0.12), axeBlade);
+      blade1.position.x = 0.55;
+      axeHead.add(blade1);
+      const blade1Edge = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.55, 4), axeBlade);
+      blade1Edge.rotation.z = -Math.PI / 2;
+      blade1Edge.position.set(1.32, 0, 0);
+      axeHead.add(blade1Edge);
+      const blade2 = blade1.clone();
+      blade2.position.x = -0.55;
+      axeHead.add(blade2);
+      const blade2Edge = blade1Edge.clone();
+      blade2Edge.position.x = -1.32;
+      blade2Edge.rotation.z = Math.PI / 2;
+      axeHead.add(blade2Edge);
+      const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.35, 10), bronzeDark);
+      socket.rotation.z = Math.PI / 2;
+      axeHead.add(socket);
+      const drip = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshStandardMaterial({
+        color: 0x60c080, emissive: 0x40ff80, emissiveIntensity: 0.45, transparent: true, opacity: 0.85,
+      }));
+      drip.position.set(1.25, -0.05, 0);
+      axeHead.add(drip);
+
+      const legL = new THREE.Group();
+      legL.position.set(-0.88, -0.05, 0);
+      hips.add(legL);
+      addLimbSegment(legL, 0.72, 0.88, 2.45, bronze, -1.22);
+      const kneeL = new THREE.Mesh(new THREE.SphereGeometry(0.62, 12, 10), bronzeDark);
+      kneeL.position.y = -2.45;
+      legL.add(kneeL);
+      const shinL = new THREE.Group();
+      shinL.position.y = -2.45;
+      legL.add(shinL);
+      addLimbSegment(shinL, 0.58, 0.48, 2.35, bronze, -1.18);
+      const footL = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), bronzeDark);
+      footL.scale.set(1.1, 0.55, 1.45);
+      footL.position.set(0.08, -2.38, 0.22);
+      shinL.add(footL);
+
+      const legR = new THREE.Group();
+      legR.position.set(0.88, -0.05, 0);
+      hips.add(legR);
+      addLimbSegment(legR, 0.72, 0.88, 2.45, bronze, -1.22);
+      const kneeR = new THREE.Mesh(new THREE.SphereGeometry(0.62, 12, 10), bronzeDark);
+      kneeR.position.y = -2.45;
+      legR.add(kneeR);
+      const shinR = new THREE.Group();
+      shinR.position.y = -2.45;
+      legR.add(shinR);
+      addLimbSegment(shinR, 0.58, 0.48, 2.35, bronze, -1.18);
+      const footR = footL.clone();
+      footR.position.set(0.08, -2.38, 0.22);
+      shinR.add(footR);
+
+      group.add(root);
+
+      const label = TerrainGen._makeNameSprite('刑天', '#ffb060');
+      label.position.set(0, 9.8, 0);
+      label.scale.set(10, 2.5, 1);
+      root.add(label);
+
+      return {
+        group, root, hips, torso, eyeL, eyeR, mouth, neckScar,
+        armL, foreL, shield, armR, foreR, axe, legL, shinL, legR, shinR,
+        homeYaw: Math.PI * 0.15,
+        yaw: Math.PI * 0.15,
+        state: 'idle',
+        stateTime: 0,
+        animPhase: 0,
+        action: null,
+        actionT: 0,
+        actionDur: 1.1,
+        growlT: 0,
+        nextDemo: 6 + Math.random() * 6,
+        drip,
+      };
+    },
+
+    update(npc, dt, playerPos) {
+      if (!npc) return;
+      const dist0 = Math.hypot(playerPos.x - XINGTIAN.x, playerPos.z - XINGTIAN.z);
+      if (dist0 > 95) return;
+      npc.stateTime += dt;
+      npc.animPhase += dt;
+      const dx = playerPos.x - XINGTIAN.x;
+      const dz = playerPos.z - XINGTIAN.z;
+      const dist = Math.hypot(dx, dz);
+
+      if (dist < XINGTIAN.alertRadius) {
+        npc.yaw = Math.atan2(dx, dz);
+        npc.state = dist < 22 ? 'alert' : 'watch';
+      } else {
+        npc.state = 'idle';
+        npc.yaw = THREE.MathUtils.lerp(npc.yaw, npc.homeYaw, dt * 0.5);
+      }
+      npc.root.rotation.y = npc.yaw;
+
+      if (npc.growlT > 0) npc.growlT -= dt;
+      else if (dist < 24 && npc.stateTime > 5) {
+        npc.growlT = 1.8;
+        npc.stateTime = 0;
+      }
+
+      if (!npc.action && dist < XINGTIAN.demoRadius && npc.stateTime > npc.nextDemo) {
+        const demos = ['axe_swing', 'shield_bash', 'stomp'];
+        npc.action = demos[Math.floor(Math.random() * demos.length)];
+        npc.actionT = 0;
+        npc.actionDur = npc.action === 'stomp' ? 0.85 : 1.15;
+        npc.stateTime = 0;
+        npc.nextDemo = 8 + Math.random() * 10;
+      }
+
+      if (npc.action) {
+        npc.actionT += dt / npc.actionDur;
+        if (npc.actionT >= 1) {
+          npc.action = null;
+          npc.actionT = 0;
+        }
+        this._applyAction(npc);
+      } else {
+        this._applyIdle(npc, dt);
+      }
+    },
+
+    _applyIdle(npc, dt) {
+      const t = npc.animPhase;
+      const g = npc.growlT > 0 ? 1.6 : 1;
+      npc.hips.position.y = 1.55 + Math.sin(t * 1.4) * 0.06 * g;
+      npc.hips.rotation.z = Math.sin(t * 0.85) * 0.03;
+      npc.torso.rotation.x = Math.sin(t * 0.6) * 0.018;
+
+      const eyeGlow = npc.growlT > 0 ? 1.35 + Math.sin(t * 14) * 0.2 : 1 + Math.sin(t * 2.5) * 0.08;
+      npc.eyeL.material.emissiveIntensity = 1.2 * eyeGlow;
+      npc.eyeR.material.emissiveIntensity = 1.2 * eyeGlow;
+
+      const mouthOpen = npc.growlT > 0
+        ? 1.4 + Math.sin(t * 16) * 0.18
+        : 0.9 + Math.sin(t * 1.4) * 0.12;
+      npc.mouth.scale.y = mouthOpen;
+
+      npc.armR.rotation.x = -0.55 + Math.sin(t * 0.5) * 0.04;
+      npc.armR.rotation.z = 0.35;
+      npc.foreR.rotation.x = -1.05;
+      npc.axe.rotation.x = 0.2 + Math.sin(t * 0.4) * 0.05;
+
+      npc.armL.rotation.x = 0.15;
+      npc.foreL.rotation.x = -0.35;
+      npc.foreL.position.z = Math.sin(t * 0.7) * 0.05;
+      npc.shield.rotation.y = Math.sin(t * 0.5) * 0.06;
+
+      const w = Math.sin(t * 0.9);
+      npc.legL.rotation.x = w * 0.05;
+      npc.legR.rotation.x = -w * 0.05;
+
+      npc.neckScar.material.emissiveIntensity = 0.55 + Math.sin(t * 3.2) * 0.15;
+      npc.drip.position.y = -0.05 + Math.sin(t * 4) * 0.1;
+    },
+
+    _applyAction(npc) {
+      const p = clamp(npc.actionT, 0, 1);
+      const ease = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+
+      if (npc.action === 'axe_swing') {
+        const swing = Math.sin(ease * Math.PI);
+        npc.armR.rotation.x = -0.55 - swing * 2.1;
+        npc.armR.rotation.z = 0.35 + swing * 0.4;
+        npc.foreR.rotation.x = -1.05 - swing * 0.8;
+        npc.axe.rotation.x = 0.2 - swing * 1.4;
+        npc.torso.rotation.x = swing * 0.25;
+      } else if (npc.action === 'shield_bash') {
+        const bash = Math.sin(ease * Math.PI);
+        npc.armL.rotation.x = 0.15 - bash * 0.35;
+        npc.armL.rotation.z = bash * 0.25;
+        npc.foreL.position.z = bash * 1.4;
+        npc.foreL.rotation.x = -0.35 - bash * 0.5;
+        npc.hips.position.y = 1.55 + bash * 0.15;
+        npc.torso.rotation.y = -bash * 0.2;
+      } else if (npc.action === 'stomp') {
+        const stomp = ease < 0.35 ? ease / 0.35 : 1 - (ease - 0.35) / 0.65;
+        npc.legL.rotation.x = -stomp * 0.85;
+        npc.legR.rotation.x = stomp * 0.12;
+        npc.hips.position.y = 1.55 - stomp * 0.35;
+        npc.hips.position.x = stomp * 0.2;
+        if (ease > 0.32 && ease < 0.45) npc.mouth.scale.y = 1.4;
+      }
+    },
+  };
+
+  function addGrassInstanced(group, items) {
+    if (!items.length) return;
+    const geo = new THREE.ConeGeometry(0.08, 0.45, 4);
+    geo.translate(0, 0.225, 0);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x4a9048, roughness: 0.92, side: THREE.DoubleSide });
+    const mesh = new THREE.InstancedMesh(geo, mat, items.length);
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3();
+    const e = new THREE.Euler();
+    items.forEach((it, i) => {
+      const sc = it.s;
+      p.set(it.x, it.y, it.z);
+      e.set(0, it.rot, 0);
+      q.setFromEuler(e);
+      s.set(sc, sc * (0.85 + (it.rot % 1) * 0.3), sc);
+      m.compose(p, q, s);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh);
+  }
+
+  function addTallGrassInstanced(group, items) {
+    if (!items.length) return;
+    const bladesPerTuft = 3;
+    const count = items.length * bladesPerTuft;
+    const geo = new THREE.ConeGeometry(0.1, 1.25, 4);
+    geo.translate(0, 0.625, 0);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x3d8a38, roughness: 0.9, side: THREE.DoubleSide });
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3();
+    const e = new THREE.Euler();
+    let idx = 0;
+    items.forEach(it => {
+      const sc = it.s * (0.98 + (it.rot % 1) * 0.38);
+      for (let b = 0; b < bladesPerTuft; b++) {
+        const spread = (b - 1) * 0.14;
+        const yaw = it.rot + spread + hash2(it.x, it.z + b) * 0.5;
+        p.set(
+          it.x + Math.cos(yaw) * 0.12,
+          it.y,
+          it.z + Math.sin(yaw) * 0.12,
+        );
+        e.set((hash2(b, it.rot) - 0.5) * 0.18, yaw, (hash2(b, it.x) - 0.5) * 0.12);
+        q.setFromEuler(e);
+        s.set(sc * 0.9, sc * (1.15 + b * 0.08), sc * 0.9);
+        m.compose(p, q, s);
+        mesh.setMatrixAt(idx++, m);
+      }
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh);
+  }
+
+  function addCassiaInstanced(group, items, trunkMat, leafMat) {
+    if (!items.length) return;
+    const trunkGeo = new THREE.CylinderGeometry(0.38, 0.62, 1, 8);
+    trunkGeo.translate(0, 0.5, 0);
+    const leafGeo = new THREE.SphereGeometry(1, 10, 8);
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, items.length);
+    const canopies = new THREE.InstancedMesh(leafGeo, leafMat, items.length);
+    const dummy = new THREE.Object3D();
+    items.forEach((it, i) => {
+      const rot = it.rot ?? 0;
+      const tilt = it.tilt ?? 0;
+      const H = 3.25 * it.s;
+      const crownR = 1.65 * it.s;
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.rotation.set(tilt * 0.5, rot, tilt * 0.6);
+      dummy.scale.set(it.s * 1.05, H, it.s * 1.05);
+      dummy.updateMatrix();
+      trunks.setMatrixAt(i, dummy.matrix);
+      dummy.position.set(
+        it.x + Math.cos(rot) * crownR * 0.1,
+        it.y + H + crownR * 0.4,
+        it.z + Math.sin(rot) * crownR * 0.1,
+      );
+      dummy.rotation.set(tilt * 0.35, rot, tilt * 0.4);
+      dummy.scale.set(crownR * 1.05, crownR * 0.52, crownR * 1.05);
+      dummy.updateMatrix();
+      canopies.setMatrixAt(i, dummy.matrix);
+    });
+    trunks.instanceMatrix.needsUpdate = true;
+    canopies.instanceMatrix.needsUpdate = true;
+    group.add(trunks, canopies);
+  }
+
+
+  function addCinnamonInstanced(group, items, trunkMat, barkMat, innerMat, leafMat, leafTopMat) {
+    if (!items.length) return;
+    const trunkGeo = new THREE.CylinderGeometry(0.24, 0.38, 1, 8);
+    trunkGeo.translate(0, 0.5, 0);
+    const curlGeo = new THREE.TorusGeometry(0.26, 0.07, 6, 12, Math.PI * 1.35);
+    const padGeo = new THREE.CylinderGeometry(1, 1, 0.16, 12);
+    const twigGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.55, 5);
+    twigGeo.translate(0, 0.28, 0);
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, items.length);
+    const curls = new THREE.InstancedMesh(curlGeo, barkMat, items.length * 3);
+    const inners = new THREE.InstancedMesh(curlGeo, innerMat, items.length * 2);
+    const pads = new THREE.InstancedMesh(padGeo, leafMat, items.length * 4);
+    const padTops = new THREE.InstancedMesh(padGeo, leafTopMat, items.length * 4);
+    const twigs = new THREE.InstancedMesh(twigGeo, barkMat, items.length * 3);
+    const dummy = new THREE.Object3D();
+    let ci = 0, ii = 0, pi = 0, pti = 0, ti = 0;
+    items.forEach((it, i) => {
+      const H = 3.85 * it.s;
+      const rot = it.rot ?? 0;
+      const tilt = it.tilt ?? 0;
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.rotation.set(tilt * 0.35, rot, tilt * 0.45);
+      dummy.scale.set(it.s * 0.95, H, it.s * 0.95);
+      dummy.updateMatrix();
+      trunks.setMatrixAt(i, dummy.matrix);
+      for (let c = 0; c < 3; c++) {
+        const cy = it.y + H * (0.28 + c * 0.22);
+        const cRot = rot + c * 1.05 + (hash2(it.x, c) - 0.5) * 0.6;
+        const cx = it.x + Math.cos(cRot) * 0.22 * it.s;
+        const cz = it.z + Math.sin(cRot) * 0.22 * it.s;
+        dummy.position.set(cx, cy, cz);
+        dummy.rotation.set(Math.PI / 2 + tilt * 0.2, cRot + Math.PI * 0.25, tilt);
+        dummy.scale.set(it.s * (1.0 + c * 0.06), it.s * (1.0 + c * 0.06), it.s);
+        dummy.updateMatrix();
+        curls.setMatrixAt(ci++, dummy.matrix);
+        if (c < 2) {
+          dummy.rotation.set(Math.PI / 2 + tilt * 0.15, cRot + Math.PI * 0.55, tilt * 0.8);
+          dummy.scale.set(it.s * 0.82, it.s * 0.82, it.s * 0.82);
+          dummy.updateMatrix();
+          inners.setMatrixAt(ii++, dummy.matrix);
+        }
+      }
+      for (let layer = 0; layer < 4; layer++) {
+        const layerY = it.y + H * (0.52 + layer * 0.14);
+        const layerRot = rot + (hash2(layer, it.x + it.z) - 0.5) * 0.8;
+        const off = (0.18 + layer * 0.14) * it.s;
+        const ox = it.x + Math.cos(layerRot) * off;
+        const oz = it.z + Math.sin(layerRot) * off;
+        const padR = (0.72 + layer * 0.14 + hash2(it.z, it.x + layer) * 0.12) * it.s;
+        dummy.position.set(ox, layerY, oz);
+        dummy.rotation.set(0, layerRot, (hash2(it.x, layer) - 0.5) * 0.12);
+        dummy.scale.set(padR, 0.14 * it.s, padR * (0.88 + hash2(layer, it.z) * 0.12));
+        dummy.updateMatrix();
+        pads.setMatrixAt(pi++, dummy.matrix);
+        dummy.position.set(ox, layerY + 0.1 * it.s, oz);
+        dummy.scale.set(padR * 0.72, 0.1 * it.s, padR * 0.72);
+        dummy.updateMatrix();
+        padTops.setMatrixAt(pti++, dummy.matrix);
+        if (layer < 3) {
+          dummy.position.set(ox, layerY - 0.15 * it.s, oz);
+          dummy.rotation.set(0.4, layerRot, 0.3);
+          dummy.scale.set(it.s, it.s * 0.9, it.s);
+          dummy.updateMatrix();
+          twigs.setMatrixAt(ti++, dummy.matrix);
+        }
+      }
+    });
+    trunks.instanceMatrix.needsUpdate = true;
+    curls.instanceMatrix.needsUpdate = true;
+    inners.instanceMatrix.needsUpdate = true;
+    pads.instanceMatrix.needsUpdate = true;
+    padTops.instanceMatrix.needsUpdate = true;
+    twigs.instanceMatrix.needsUpdate = true;
+    group.add(trunks, curls, inners, pads, padTops, twigs);
+  }
+
+  function addJadeInstanced(group, items, mat) {
+    if (!items.length) return;
+    const geo = new THREE.OctahedronGeometry(0.28, 0);
+    const mesh = new THREE.InstancedMesh(geo, mat, items.length);
+    const dummy = new THREE.Object3D();
+    items.forEach((it, i) => {
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.rotation.set(0.4, it.rot, 0.2);
+      dummy.scale.setScalar(it.s);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh);
+  }
+
+  function addGlowInstanced(group, items) {
+    if (!items.length) return;
+    const geo = new THREE.SphereGeometry(0.12, 6, 6);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xffd860, emissive: 0xffc840, emissiveIntensity: 0.9, roughness: 0.35,
+    });
+    const mesh = new THREE.InstancedMesh(geo, mat, items.length);
+    const dummy = new THREE.Object3D();
+    items.forEach((it, i) => {
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.scale.setScalar(it.s);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    group.add(mesh);
+  }
+
+  function addMiguInstanced(group, items, trunkMat, glowMat) {
+    if (!items.length) return;
+    const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 1, 7);
+    trunkGeo.translate(0, 0.5, 0);
+    const glowGeo = new THREE.SphereGeometry(0.14, 6, 6);
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, items.length);
+    const glows = new THREE.InstancedMesh(glowGeo, glowMat, items.length * 2);
+    const dummy = new THREE.Object3D();
+    let gi = 0;
+    items.forEach((it, i) => {
+      const H = 3.1 * it.s;
+      dummy.position.set(it.x, it.y, it.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(it.s, H, it.s);
+      dummy.updateMatrix();
+      trunks.setMatrixAt(i, dummy.matrix);
+      for (let f = 0; f < 2; f++) {
+        const ang = f * 2.4 + hash2(it.x, it.z) * 6;
+        dummy.position.set(
+          it.x + Math.cos(ang) * 0.35 * it.s,
+          it.y + H + 0.1 * it.s + f * 0.1 * it.s,
+          it.z + Math.sin(ang) * 0.35 * it.s,
+        );
+        dummy.scale.set(it.s, it.s, it.s);
+        dummy.updateMatrix();
+        glows.setMatrixAt(gi++, dummy.matrix);
+      }
+    });
+    trunks.instanceMatrix.needsUpdate = true;
+    glows.instanceMatrix.needsUpdate = true;
+    group.add(trunks, glows);
+  }
+
+  const Soundscape = {
+    ctx: null,
+    master: null,
+    ambGain: null,
+    _lastStep: 0,
+    _birdT: 0,
+    _inited: false,
+
+    init() {
+      if (this._inited) return;
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.38;
+      this.master.connect(this.ctx.destination);
+      this.ambGain = this.ctx.createGain();
+      this.ambGain.gain.value = 0;
+      this.ambGain.connect(this.master);
+      const len = this.ctx.sampleRate * 2;
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const amb = this.ctx.createBufferSource();
+      amb.buffer = buf;
+      amb.loop = true;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = 420;
+      amb.connect(filt);
+      filt.connect(this.ambGain);
+      amb.start();
+      this._inited = true;
+    },
+
+    resume() {
+      this.init();
+      if (this.ctx?.state === 'suspended') this.ctx.resume();
+    },
+
+    _tone(freq, dur, type = 'sine', vol = 0.08, ramp = 0.02) {
+      if (!this.ctx) return;
+      const t0 = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + ramp);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      osc.connect(g);
+      g.connect(this.master);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.05);
+    },
+
+    _noise(dur, vol = 0.04, freq = 800) {
+      if (!this.ctx) return;
+      const t0 = this.ctx.currentTime;
+      const len = Math.ceil(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.value = freq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      src.connect(filt);
+      filt.connect(g);
+      g.connect(this.master);
+      src.start(t0);
+      src.stop(t0 + dur);
+    },
+
+    playFootstep() {
+      this._noise(0.06, 0.05, 400);
+      this._tone(120 + Math.random() * 40, 0.05, 'triangle', 0.03);
+    },
+
+    playSplash() {
+      this._noise(0.35, 0.12, 1200);
+      this._tone(180, 0.25, 'sine', 0.06);
+    },
+
+    playBird() {
+      this._tone(880, 0.12, 'sine', 0.05);
+      setTimeout(() => this._tone(1240, 0.15, 'sine', 0.04), 90);
+    },
+
+    playWind(vol) {
+      if (!this.ctx || !this.ambGain) return;
+      this.ambGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.4);
+    },
+
+    update(dt, player, region) {
+      if (!this._inited) return;
+      let amb = 0.02;
+      if (region === NANSHAN.id) amb = 0.05;
+      if (region === '扶桑') amb = 0.07;
+      if (region === '海外東' || region === '海外北') amb = 0.06;
+      if (player.inWater) amb += 0.04;
+      this.playWind(amb);
+
+      this._birdT -= dt;
+      if (region === '北山' && this._birdT <= 0) {
+        this.playBird();
+        this._birdT = 5 + Math.random() * 8;
+      }
+
+      if (player.onGround && !player.inWater && (Math.abs(player.vel.x) > 1 || Math.abs(player.vel.z) > 1)) {
+        this._lastStep += dt;
+        if (this._lastStep > 0.38) {
+          this.playFootstep();
+          this._lastStep = 0;
+        }
+      } else {
+        this._lastStep = 0.38;
+      }
+    },
+  };
+
+  const JingweiNPC = {
+    pickDropTarget(npc) {
+      const seed = npc._dropSeed ?? 0;
+      for (let i = 0; i < 40; i++) {
+        const x = WORLD_CENTER + (hash2(seed, i * 3) - 0.5) * 110;
+        const z = WORLD_CENTER - ISLAND.radius - 12 - hash2(i, seed * 7) * 55;
+        const h = npc.sampleHeight(x, z);
+        if (h < WATER_LEVEL - 0.4) {
+          npc.dropX = x;
+          npc.dropZ = z;
+          npc.dropSurfaceY = npc.gridY + WATER_LEVEL;
+          npc.dropFlyY = npc.gridY + WATER_LEVEL + 3 + hash2(seed, i) * 2.5;
+          return;
+        }
+      }
+      npc.dropX = WORLD_CENTER - 55;
+      npc.dropZ = WORLD_CENTER - ISLAND.radius - 28;
+      npc.dropSurfaceY = npc.gridY + WATER_LEVEL;
+      npc.dropFlyY = npc.gridY + WATER_LEVEL + 4;
+    },
+
+    spawn(group, gridY, sampleHeight) {
+      const peakY = gridY + sampleHeight(JINGWEI.peakX, JINGWEI.peakZ) + 14;
+      const pickY = gridY + sampleHeight(JINGWEI.pickX, JINGWEI.pickZ) + 2.2;
+      const root = new THREE.Group();
+      root.name = 'jingwei';
+
+      const black = new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.75 });
+      const pattern = new THREE.MeshStandardMaterial({ color: 0x4a3028, roughness: 0.7 });
+      const white = new THREE.MeshStandardMaterial({ color: 0xece8e0, roughness: 0.55 });
+      const red = new THREE.MeshStandardMaterial({ color: 0xc83028, roughness: 0.65 });
+      const rockMat = new THREE.MeshStandardMaterial({ color: 0x6a6860, roughness: 0.9 });
+
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), black);
+      body.scale.set(1.1, 0.82, 1.25);
+      root.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), pattern);
+      head.position.set(0, 0.14, 0.38);
+      root.add(head);
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.2, 6), white);
+      beak.rotation.x = Math.PI / 2;
+      beak.position.set(0, 0.1, 0.56);
+      root.add(beak);
+      const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.32, 0.5), black);
+      wingL.position.set(-0.34, 0.04, -0.02);
+      root.add(wingL);
+      const wingR = wingL.clone();
+      wingR.position.x = 0.34;
+      root.add(wingR);
+      const footL = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.038, 0.16, 5), red);
+      footL.position.set(-0.1, -0.26, 0.08);
+      root.add(footL);
+      const footR = footL.clone();
+      footR.position.x = 0.1;
+      root.add(footR);
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.11, 0), rockMat);
+      rock.position.set(0, 0.02, 0.48);
+      rock.visible = false;
+      root.add(rock);
+
+      const thrownRock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.11, 0), rockMat);
+      thrownRock.visible = false;
+      group.add(thrownRock);
+
+      root.position.set(JINGWEI.peakX, peakY, JINGWEI.peakZ);
+      group.add(root);
+
+      const label = TerrainGen._makeNameSprite('精衛', '#90c8f0');
+      label.position.set(0, 1.2, 0);
+      label.scale.set(5, 1.25, 1);
+      root.add(label);
+
+      const npc = {
+        root, wingL, wingR, beak, rock, thrownRock,
+        gridY, sampleHeight, peakY, pickY,
+        dropX: WORLD_CENTER - 50, dropZ: WORLD_CENTER - ISLAND.radius - 25,
+        dropSurfaceY: gridY + WATER_LEVEL, dropFlyY: gridY + WATER_LEVEL + 4,
+        phase: 'rest', t: 0, dur: 1, waitT: 1.8, wingPhase: 0, _dropSeed: 1,
+      };
+      this.pickDropTarget(npc);
+      return npc;
+    },
+
+    update(npc, dt) {
+      if (!npc) return;
+      npc.wingPhase += dt * 16;
+      const flap = Math.sin(npc.wingPhase) * 0.6;
+      npc.wingL.rotation.z = flap;
+      npc.wingR.rotation.z = -flap;
+
+      const ease = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+      const flyArc = u => Math.sin(u * Math.PI) * 7;
+
+      if (npc.phase === 'rest') {
+        npc.waitT -= dt;
+        if (npc.waitT <= 0) {
+          npc.phase = 'to_pick';
+          npc.t = 0;
+          npc.dur = 2.6;
+        }
+        return;
+      }
+
+      npc.t += dt;
+      const u = ease(clamp(npc.t / npc.dur, 0, 1));
+
+      if (npc.phase === 'to_pick') {
+        npc.root.position.set(
+          lerp(JINGWEI.peakX, JINGWEI.pickX, u),
+          lerp(npc.peakY, npc.pickY, u) + flyArc(u),
+          lerp(JINGWEI.peakZ, JINGWEI.pickZ, u),
+        );
+        npc.root.lookAt(JINGWEI.pickX, npc.pickY, JINGWEI.pickZ);
+        if (npc.t >= npc.dur) { npc.phase = 'picking'; npc.t = 0; npc.dur = 1.3; }
+      } else if (npc.phase === 'picking') {
+        npc.root.position.set(JINGWEI.pickX, npc.pickY, JINGWEI.pickZ);
+        npc.beak.rotation.x = Math.PI / 2 + Math.sin(npc.t * 10) * 0.15;
+        if (npc.t > 0.45) npc.rock.visible = true;
+        if (npc.t >= npc.dur) {
+          npc._dropSeed = Math.random() * 10000;
+          JingweiNPC.pickDropTarget(npc);
+          npc.phase = 'to_drop';
+          npc.t = 0;
+          npc.dur = 3.8;
+        }
+      } else if (npc.phase === 'to_drop') {
+        npc.root.position.set(
+          lerp(JINGWEI.pickX, npc.dropX, u),
+          lerp(npc.pickY, npc.dropFlyY, u) + flyArc(u),
+          lerp(JINGWEI.pickZ, npc.dropZ, u),
+        );
+        npc.root.lookAt(npc.dropX, npc.dropFlyY, npc.dropZ);
+        if (npc.t >= npc.dur) {
+          npc.phase = 'throwing';
+          npc.t = 0;
+          npc.dur = 1.4;
+          npc.rock.visible = false;
+          npc.thrownRock.visible = true;
+          npc.throwStartY = npc.dropFlyY;
+        }
+      } else if (npc.phase === 'throwing') {
+        const tu = clamp(npc.t / npc.dur, 0, 1);
+        const dropY = lerp(npc.throwStartY, npc.dropSurfaceY - 0.15, tu * tu);
+        npc.root.position.set(npc.dropX, npc.dropFlyY, npc.dropZ);
+        npc.thrownRock.position.set(npc.dropX, dropY, npc.dropZ);
+        if (tu > 0.85 && !npc._splashed) {
+          npc._splashed = true;
+          Soundscape.playSplash();
+        }
+        if (npc.t >= npc.dur) {
+          npc.thrownRock.visible = false;
+          npc._splashed = false;
+          npc.phase = 'to_peak';
+          npc.t = 0;
+          npc.dur = 3.5;
+        }
+      } else if (npc.phase === 'to_peak') {
+        npc.root.position.set(
+          lerp(npc.dropX, JINGWEI.peakX, u),
+          lerp(npc.dropFlyY, npc.peakY, u) + flyArc(u),
+          lerp(npc.dropZ, JINGWEI.peakZ, u),
+        );
+        npc.root.lookAt(JINGWEI.peakX, npc.peakY, JINGWEI.peakZ);
+        if (npc.t >= npc.dur) {
+          npc.phase = 'rest';
+          npc.waitT = 2.2;
+          npc.t = 0;
+          Soundscape.playBird();
+        }
+      }
+    },
+  };
+
+  const JiweiFoxNPC = {
+    spawn(group, gridY, sampleHeight) {
+      const ground = sampleHeight(JIUWEIHU.x, JIUWEIHU.z);
+      const root = new THREE.Group();
+      root.name = 'jiuweihu';
+      root.position.set(JIUWEIHU.x, gridY + ground, JIUWEIHU.z);
+
+      const model = new THREE.Group();
+      model.scale.setScalar(4.2);
+      root.add(model);
+
+      const fur = new THREE.MeshStandardMaterial({
+        color: 0xfff0e8, emissive: 0xffc8b0, emissiveIntensity: 0.12, roughness: 0.72,
+      });
+      const furDark = new THREE.MeshStandardMaterial({
+        color: 0xe87858, emissive: 0xd05848, emissiveIntensity: 0.18, roughness: 0.78,
+      });
+      const tip = new THREE.MeshStandardMaterial({
+        color: 0xffa8c8, emissive: 0xff6898, emissiveIntensity: 0.55, roughness: 0.45,
+      });
+      const eyeMat = new THREE.MeshStandardMaterial({
+        color: 0xffd0e8, emissive: 0xff88c8, emissiveIntensity: 0.95, roughness: 0.18,
+      });
+      const mystic = new THREE.MeshStandardMaterial({
+        color: 0xffb8d8, emissive: 0xff70a8, emissiveIntensity: 0.75,
+        transparent: true, opacity: 0.82, roughness: 0.2,
+      });
+      const noseMat = new THREE.MeshStandardMaterial({ color: 0x4a2838, roughness: 0.85 });
+
+      const hips = new THREE.Group();
+      hips.position.y = 0.42;
+      model.add(hips);
+
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), fur);
+      body.scale.set(1.15, 0.82, 1.45);
+      body.position.y = 0.38;
+      hips.add(body);
+
+      const chest = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), fur);
+      chest.position.set(0, 0.48, 0.28);
+      hips.add(chest);
+
+      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), mystic);
+      mark.position.set(0, 0.52, 0.42);
+      mark.scale.set(0.7, 1.1, 0.35);
+      hips.add(mark);
+
+      const aura = new THREE.Mesh(
+        new THREE.TorusGeometry(0.55, 0.04, 6, 24),
+        new THREE.MeshStandardMaterial({
+          color: 0xffa8d0, emissive: 0xff68a8, emissiveIntensity: 0.6,
+          transparent: true, opacity: 0.55, roughness: 0.15,
+        }),
+      );
+      aura.rotation.x = Math.PI / 2;
+      aura.position.y = 0.55;
+      hips.add(aura);
+
+      const head = new THREE.Group();
+      head.position.set(0, 0.62, 0.62);
+      hips.add(head);
+
+      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), fur);
+      skull.scale.set(1.05, 0.95, 1.1);
+      head.add(skull);
+
+      const snout = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), furDark);
+      snout.scale.set(0.85, 0.7, 1.2);
+      snout.position.set(0, -0.04, 0.22);
+      head.add(snout);
+
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), noseMat);
+      nose.position.set(0, -0.02, 0.32);
+      head.add(nose);
+
+      const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 5), furDark);
+      jaw.scale.set(1.2, 0.55, 0.9);
+      jaw.position.set(0, -0.12, 0.18);
+      head.add(jaw);
+
+      const earL = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.26, 5), furDark);
+      earL.position.set(-0.2, 0.2, -0.02);
+      earL.rotation.z = 0.25;
+      head.add(earL);
+      const earR = earL.clone();
+      earR.position.x = 0.2;
+      earR.rotation.z = -0.25;
+      head.add(earR);
+      const earGlowL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), mystic);
+      earGlowL.position.set(-0.2, 0.28, 0.02);
+      head.add(earGlowL);
+      const earGlowR = earGlowL.clone();
+      earGlowR.position.x = 0.2;
+      head.add(earGlowR);
+
+      const brow = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), mystic);
+      brow.position.set(0, 0.14, 0.18);
+      brow.scale.set(2.2, 0.45, 0.7);
+      head.add(brow);
+
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), eyeMat);
+      eyeL.position.set(-0.12, 0.06, 0.2);
+      head.add(eyeL);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.12;
+      head.add(eyeR);
+
+      const legFL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.38, 6), furDark);
+      legFL.position.set(-0.22, 0.12, 0.42);
+      hips.add(legFL);
+      const legFR = legFL.clone();
+      legFR.position.x = 0.22;
+      hips.add(legFR);
+      const legBL = legFL.clone();
+      legBL.position.set(-0.2, 0.12, -0.28);
+      hips.add(legBL);
+      const legBR = legBL.clone();
+      legBR.position.x = 0.2;
+      hips.add(legBR);
+
+      const tailRoot = new THREE.Group();
+      tailRoot.position.set(0, 0.52, -0.55);
+      hips.add(tailRoot);
+
+      const tails = [];
+      for (let i = 0; i < 9; i++) {
+        const tGroup = new THREE.Group();
+        const spread = (i - 4) * 0.14;
+        tGroup.rotation.y = spread;
+        const seg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.55, 6), fur);
+        seg1.position.y = 0.28;
+        seg1.rotation.x = -0.55;
+        tGroup.add(seg1);
+        const seg2 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.5, 6), furDark);
+        seg2.position.set(0, 0.52, -0.18);
+        seg2.rotation.x = -0.85;
+        tGroup.add(seg2);
+        const segGlow = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 4), mystic);
+        segGlow.position.set(0, 0.38, -0.08);
+        tGroup.add(segGlow);
+        const tipMesh = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 5), tip);
+        tipMesh.position.set(0, 0.78, -0.38);
+        tipMesh.rotation.x = -1.1;
+        tGroup.add(tipMesh);
+        tailRoot.add(tGroup);
+        tails.push(tGroup);
+      }
+
+      group.add(root);
+
+      const label = TerrainGen._makeNameSprite('九尾狐', '#ffb8d8');
+      label.position.set(0, 6.2, 0);
+      label.scale.set(10, 2.5, 1);
+      root.add(label);
+
+      return {
+        root, hips, head, jaw, body, tails, eyeL, eyeR, aura, mark,
+        gridY, sampleHeight,
+        homeX: JIUWEIHU.x, homeZ: JIUWEIHU.z,
+        gx: JIUWEIHU.x, gz: JIUWEIHU.z,
+        yaw: Math.PI * 0.35,
+        phase: 0,
+        wanderT: 1.5,
+        dir: Math.PI * 0.35,
+        state: 'idle',
+        cryT: 0,
+        cryCooldown: 2 + Math.random() * 3,
+        sitT: 0,
+      };
+    },
+
+    update(npc, dt, playerPos) {
+      if (!npc) return;
+      const pdx = playerPos.x - npc.gx;
+      const pdz = playerPos.z - npc.gz;
+      const playerDist = Math.hypot(pdx, pdz);
+      if (playerDist > 90) return;
+
+      npc.phase += dt;
+      npc.wanderT -= dt;
+      npc.cryT = Math.max(0, npc.cryT - dt);
+      npc.cryCooldown -= dt;
+
+      if (playerDist < JIUWEIHU.alertRadius) {
+        npc.state = 'watch';
+        npc.yaw = Math.atan2(pdx, pdz);
+        if (playerDist < 14 && npc.cryT <= 0 && npc.cryCooldown <= 0) {
+          npc.cryT = 1.6;
+          npc.cryCooldown = 5 + Math.random() * 6;
+        }
+      } else {
+        npc.state = 'prowl';
+        if (npc.wanderT <= 0) {
+          npc.wanderT = 2 + Math.random() * 5;
+          npc.dir += (Math.random() - 0.5) * 1.6;
+        }
+        const spd = 1.25;
+        const nx = npc.gx + Math.cos(npc.dir) * dt * spd;
+        const nz = npc.gz + Math.sin(npc.dir) * dt * spd;
+        if (isValidJiweiFoxPos(nx, nz, npc.sampleHeight)) {
+          npc.gx = nx;
+          npc.gz = nz;
+          npc.yaw = npc.dir;
+        } else {
+          npc.dir = Math.atan2(npc.homeX - npc.gx, npc.homeZ - npc.gz)
+            + (hash2(npc.phase, npc.wanderT) - 0.5) * 1.4;
+          npc.wanderT = 0.4;
+        }
+      }
+
+      const ground = npc.gridY + npc.sampleHeight(npc.gx, npc.gz);
+      const sit = npc.state === 'prowl' && Math.sin(npc.phase * 0.4) > 0.82 && playerDist > 12;
+      npc.root.position.set(npc.gx, ground, npc.gz);
+      npc.root.rotation.y = npc.yaw;
+
+      const breathe = Math.sin(npc.phase * 2.2) * 0.02;
+      npc.hips.position.y = 0.42 + breathe + (sit ? -0.12 : 0);
+      npc.body.scale.y = 0.82 + breathe * 2;
+
+      const tailLift = playerDist < JIUWEIHU.alertRadius ? 0.35 : 0.12;
+      npc.tails.forEach((t, i) => {
+        const w = Math.sin(npc.phase * 2.8 + i * 0.65);
+        t.rotation.z = w * (0.28 + tailLift);
+        t.rotation.x = -0.15 + Math.sin(npc.phase * 1.9 + i * 0.45) * 0.15;
+      });
+
+      if (npc.aura) {
+        npc.aura.rotation.z = npc.phase * 0.45;
+        npc.aura.material.emissiveIntensity = 0.5 + Math.sin(npc.phase * 2.2) * 0.2;
+      }
+      if (npc.mark) {
+        npc.mark.material.emissiveIntensity = 0.65 + Math.sin(npc.phase * 3.1) * 0.25;
+      }
+
+      const cry = npc.cryT > 0;
+      npc.head.rotation.x = cry ? Math.sin(npc.phase * 18) * 0.08 - 0.05 : Math.sin(npc.phase * 1.1) * 0.04;
+      npc.jaw.rotation.x = cry ? 0.25 + Math.abs(Math.sin(npc.phase * 22)) * 0.35 : 0;
+      npc.eyeL.material.emissiveIntensity = cry ? 0.95 + Math.sin(npc.phase * 20) * 0.2 : 0.65;
+      npc.eyeR.material.emissiveIntensity = npc.eyeL.material.emissiveIntensity;
+
+      const prance = npc.state === 'prowl' && !sit ? Math.max(0, Math.sin(npc.phase * 4.5)) * 0.06 : 0;
+      npc.hips.position.y += prance;
+      npc.hips.rotation.z = Math.sin(npc.phase * 1.3) * 0.03;
+    },
+  };
+
+  const KunlunTigerGodNPC = {
+    spawn(group, gridY, sampleHeight) {
+      const ground = sampleHeight(KUNLUN.godX, KUNLUN.godZ);
+      const root = new THREE.Group();
+      root.name = 'kunlun-tiger-god';
+      root.position.set(KUNLUN.godX, gridY + ground, KUNLUN.godZ);
+      root.rotation.y = -0.6;
+
+      const model = new THREE.Group();
+      model.scale.setScalar(4.5);
+      root.add(model);
+
+      const whiteFur = new THREE.MeshStandardMaterial({
+        color: 0xf4f4fa, roughness: 0.78, metalness: 0.02,
+      });
+      const whiteSoft = new THREE.MeshStandardMaterial({
+        color: 0xffffff, emissive: 0xe8eef8, emissiveIntensity: 0.08, roughness: 0.65,
+      });
+      const patternMat = new THREE.MeshStandardMaterial({
+        color: 0x7888a8, emissive: 0x506080, emissiveIntensity: 0.22, roughness: 0.5,
+      });
+      const skin = new THREE.MeshStandardMaterial({ color: 0xe8d4c0, roughness: 0.62 });
+      const skinDark = new THREE.MeshStandardMaterial({ color: 0xc8b0a0, roughness: 0.68 });
+      const eyeWhite = new THREE.MeshStandardMaterial({ color: 0xf8f8f8, roughness: 0.3 });
+      const eyeMat = new THREE.MeshStandardMaterial({
+        color: 0x2a2018, roughness: 0.25, metalness: 0.1,
+      });
+      const pupilMat = new THREE.MeshStandardMaterial({
+        color: 0xffc840, emissive: 0xffa020, emissiveIntensity: 0.85, roughness: 0.15,
+      });
+      const noseMat = new THREE.MeshStandardMaterial({ color: 0xc89888, roughness: 0.55 });
+      const padMat = new THREE.MeshStandardMaterial({ color: 0xd8c8b8, roughness: 0.8 });
+
+      const hips = new THREE.Group();
+      hips.position.y = 0.72;
+      model.add(hips);
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.62, 1.85), whiteFur);
+      torso.position.set(0, 0.08, 0.05);
+      torso.castShadow = true;
+      hips.add(torso);
+
+      const belly = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 10), whiteSoft);
+      belly.scale.set(1.15, 0.75, 1.55);
+      belly.position.set(0, -0.08, 0.12);
+      hips.add(belly);
+
+      for (let i = 0; i < 8; i++) {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.42, 0.03), patternMat);
+        stripe.position.set((i - 3.5) * 0.14, 0.12 + (i % 2) * 0.06, 0.52);
+        stripe.rotation.y = (i - 3.5) * 0.08;
+        hips.add(stripe);
+        const sideMark = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.025, 4, 8), patternMat);
+        sideMark.position.set((i % 2 ? 0.52 : -0.52), 0.05 + (i % 3) * 0.08, -0.2 + i * 0.18);
+        sideMark.rotation.y = Math.PI / 2;
+        hips.add(sideMark);
+      }
+
+      const shoulders = new THREE.Group();
+      shoulders.position.set(0, 0.22, 0.72);
+      hips.add(shoulders);
+
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.35, 10), whiteFur);
+      neck.rotation.x = 0.35;
+      neck.position.y = 0.12;
+      shoulders.add(neck);
+
+      const faceGroup = new THREE.Group();
+      faceGroup.position.set(0, 0.28, 0.22);
+      shoulders.add(faceGroup);
+
+      const face = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 14), skin);
+      face.scale.set(0.92, 1.05, 0.78);
+      faceGroup.add(face);
+
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.08, 0.12), skinDark);
+      brow.position.set(0, 0.18, 0.24);
+      faceGroup.add(brow);
+
+      const cheekL = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), skin);
+      cheekL.position.set(-0.22, -0.02, 0.18);
+      cheekL.scale.set(0.8, 0.65, 0.6);
+      faceGroup.add(cheekL);
+      const cheekR = cheekL.clone();
+      cheekR.position.x = 0.22;
+      faceGroup.add(cheekR);
+
+      const eyeSocketL = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), eyeWhite);
+      eyeSocketL.position.set(-0.14, 0.06, 0.26);
+      eyeSocketL.scale.set(1, 0.75, 0.5);
+      faceGroup.add(eyeSocketL);
+      const eyeSocketR = eyeSocketL.clone();
+      eyeSocketR.position.x = 0.14;
+      faceGroup.add(eyeSocketR);
+
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), eyeMat);
+      eyeL.position.set(-0.14, 0.06, 0.3);
+      faceGroup.add(eyeL);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.14;
+      faceGroup.add(eyeR);
+
+      const pupilL = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), pupilMat);
+      pupilL.position.set(-0.14, 0.06, 0.335);
+      faceGroup.add(pupilL);
+      const pupilR = pupilL.clone();
+      pupilR.position.x = 0.14;
+      faceGroup.add(pupilR);
+
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), noseMat);
+      nose.scale.set(1.1, 0.75, 0.85);
+      nose.position.set(0, -0.04, 0.3);
+      faceGroup.add(nose);
+
+      const philtrum = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.04), skinDark);
+      philtrum.position.set(0, -0.1, 0.28);
+      faceGroup.add(philtrum);
+
+      const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.025, 6, 12, Math.PI), skinDark);
+      mouth.rotation.x = Math.PI;
+      mouth.position.set(0, -0.16, 0.26);
+      faceGroup.add(mouth);
+
+      const beard = new THREE.Group();
+      beard.position.set(0, -0.2, 0.22);
+      faceGroup.add(beard);
+      for (let i = 0; i < 5; i++) {
+        const whisker = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.004, 0.35, 4), whiteSoft);
+        whisker.rotation.z = (i - 2) * 0.12;
+        whisker.rotation.x = 0.4;
+        whisker.position.set((i - 2) * 0.06, -0.05, 0.08);
+        beard.add(whisker);
+      }
+
+      const earL = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 6), whiteFur);
+      earL.position.set(-0.28, 0.32, -0.02);
+      earL.rotation.z = 0.35;
+      faceGroup.add(earL);
+      const earInnerL = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 5), skin);
+      earInnerL.position.set(-0.28, 0.32, 0.02);
+      earInnerL.rotation.z = 0.35;
+      faceGroup.add(earInnerL);
+      const earR = earL.clone();
+      earR.position.x = 0.28;
+      earR.rotation.z = -0.35;
+      faceGroup.add(earR);
+      const earInnerR = earInnerL.clone();
+      earInnerR.position.x = 0.28;
+      earInnerR.rotation.z = -0.35;
+      faceGroup.add(earInnerR);
+
+      const tail = new THREE.Group();
+      tail.position.set(0, 0.18, -0.95);
+      hips.add(tail);
+      for (let i = 0; i < 6; i++) {
+        const seg = new THREE.Mesh(new THREE.SphereGeometry(0.16 - i * 0.018, 10, 8), whiteFur);
+        seg.position.set(0, 0.04 + i * 0.02, -i * 0.32);
+        seg.scale.set(0.9 - i * 0.05, 0.65, 1.05);
+        tail.add(seg);
+        if (i % 2 === 0) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.022, 4, 8), patternMat);
+          ring.rotation.x = Math.PI / 2;
+          ring.position.set(0, 0.06, -i * 0.32);
+          tail.add(ring);
+        }
+      }
+      const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), whiteSoft);
+      tailTip.position.set(0, 0.08, -1.95);
+      tailTip.scale.set(0.85, 0.9, 1.2);
+      tail.add(tailTip);
+
+      const legGeo = new THREE.CylinderGeometry(0.14, 0.16, 0.62, 8);
+      const pawGeo = new THREE.SphereGeometry(0.14, 8, 6);
+      [[-0.42, -0.22, 0.62], [0.42, -0.22, 0.62], [-0.42, -0.22, -0.58], [0.42, -0.22, -0.58]].forEach(([lx, ly, lz], i) => {
+        const leg = new THREE.Mesh(legGeo, whiteFur);
+        leg.position.set(lx, ly, lz);
+        hips.add(leg);
+        const paw = new THREE.Mesh(pawGeo, padMat);
+        paw.scale.set(1.1, 0.55, 1.25);
+        paw.position.set(lx, ly - 0.38, lz + (lz > 0 ? 0.06 : -0.06));
+        hips.add(paw);
+        if (i < 2) {
+          const claw = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 4), patternMat);
+          claw.rotation.x = Math.PI;
+          claw.position.set(lx, ly - 0.42, lz + 0.12);
+          hips.add(claw);
+        }
+      });
+
+      group.add(root);
+      const label = TerrainGen._makeNameSprite('崑崙神', '#d8e8ff');
+      label.position.set(0, 5.5, 0);
+      label.scale.set(10, 2.5, 1);
+      root.add(label);
+
+      return { root, model, hips, tail, faceGroup, pupilL, pupilR, phase: 0 };
+    },
+
+    update(npc, dt) {
+      if (!npc) return;
+      npc.phase += dt;
+      const breathe = Math.sin(npc.phase * 1.6) * 0.025;
+      npc.hips.position.y = 0.72 + breathe;
+      npc.tail.rotation.y = Math.sin(npc.phase * 1.1) * 0.3;
+      npc.faceGroup.rotation.y = Math.sin(npc.phase * 0.8) * 0.06;
+      const glow = 0.75 + Math.sin(npc.phase * 2.2) * 0.2;
+      npc.pupilL.material.emissiveIntensity = glow;
+      npc.pupilR.material.emissiveIntensity = glow;
+    },
+  };
+
+  const XiwangmuNPC = {
+    spawn(group, gridY, sampleHeight) {
+      const ground = sampleHeight(KUNLUN.xiwangmuX, KUNLUN.xiwangmuZ);
+      const root = new THREE.Group();
+      root.name = 'xiwangmu';
+      root.position.set(KUNLUN.xiwangmuX, gridY + ground, KUNLUN.xiwangmuZ);
+      root.rotation.y = Math.PI * 0.15;
+
+      const model = new THREE.Group();
+      model.scale.setScalar(3.6);
+      root.add(model);
+
+      const robeOuter = new THREE.MeshStandardMaterial({ color: 0x5a2848, roughness: 0.72 });
+      const robeInner = new THREE.MeshStandardMaterial({ color: 0x8a4868, roughness: 0.68 });
+      const goldTrim = new THREE.MeshStandardMaterial({
+        color: 0xffd060, emissive: 0xffa820, emissiveIntensity: 0.45, roughness: 0.35, metalness: 0.35,
+      });
+      const skin = new THREE.MeshStandardMaterial({ color: 0xd8b898, roughness: 0.62 });
+      const skinWarm = new THREE.MeshStandardMaterial({ color: 0xc8a080, roughness: 0.65 });
+      const toothMat = new THREE.MeshStandardMaterial({
+        color: 0xf8f4e8, emissive: 0xfff8e0, emissiveIntensity: 0.18, roughness: 0.22,
+      });
+      const leopardMat = new THREE.MeshStandardMaterial({ color: 0xb88848, roughness: 0.7 });
+      const spotMat = new THREE.MeshStandardMaterial({ color: 0x281808, roughness: 0.88 });
+      const stoneMat = new THREE.MeshStandardMaterial({ color: 0x4a5058, roughness: 0.9 });
+      const jadeSeat = new THREE.MeshStandardMaterial({
+        color: 0x68b898, emissive: 0x389868, emissiveIntensity: 0.35, roughness: 0.28, metalness: 0.15,
+      });
+
+      const throne = new THREE.Group();
+      throne.position.y = 0.05;
+      model.add(throne);
+
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.18, 12), jadeSeat);
+      seat.position.y = 0.1;
+      throne.add(seat);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 0.14), stoneMat);
+      back.position.set(0, 0.55, -0.28);
+      throne.add(back);
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.45), stoneMat);
+      armL.position.set(-0.48, 0.35, 0);
+      throne.add(armL);
+      const armR = armL.clone();
+      armR.position.x = 0.48;
+      throne.add(armR);
+
+      const figure = new THREE.Group();
+      figure.position.y = 0.22;
+      model.add(figure);
+
+      const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.55, 0.55, 12), robeOuter);
+      skirt.position.y = 0.22;
+      figure.add(skirt);
+
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.48, 10), robeInner);
+      torso.position.y = 0.62;
+      figure.add(torso);
+
+      const sash = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.04, 6, 14), goldTrim);
+      sash.rotation.x = Math.PI / 2;
+      sash.position.y = 0.48;
+      figure.add(sash);
+
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.035, 6, 12), goldTrim);
+      collar.rotation.x = Math.PI / 2;
+      collar.position.y = 0.82;
+      figure.add(collar);
+
+      const head = new THREE.Group();
+      head.position.y = 1.02;
+      figure.add(head);
+
+      const face = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), skin);
+      face.scale.set(0.95, 1.05, 0.88);
+      head.add(face);
+
+      const cheekL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), skinWarm);
+      cheekL.position.set(-0.14, -0.02, 0.16);
+      head.add(cheekL);
+      const cheekR = cheekL.clone();
+      cheekR.position.x = 0.14;
+      head.add(cheekR);
+
+      const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshStandardMaterial({ color: 0x2a1818 }));
+      eyeL.position.set(-0.09, 0.04, 0.19);
+      head.add(eyeL);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.09;
+      head.add(eyeR);
+
+      const sheng = new THREE.Group();
+      sheng.position.y = 0.28;
+      head.add(sheng);
+
+      const birdBody = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshStandardMaterial({
+        color: 0xc84828, emissive: 0xa83818, emissiveIntensity: 0.25, roughness: 0.55,
+      }));
+      birdBody.scale.set(0.9, 0.75, 1.2);
+      birdBody.position.set(0, 0.06, 0.04);
+      sheng.add(birdBody);
+
+      const crest = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 5), goldTrim);
+      crest.position.y = 0.18;
+      sheng.add(crest);
+      for (let i = 0; i < 3; i++) {
+        const feather = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.02), goldTrim);
+        feather.position.set((i - 1) * 0.07, 0.12, -0.02);
+        feather.rotation.z = (i - 1) * 0.25;
+        sheng.add(feather);
+      }
+      const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.1), new THREE.MeshStandardMaterial({ color: 0x804028 }));
+      wingL.position.set(-0.14, 0.04, 0);
+      wingL.rotation.z = 0.5;
+      sheng.add(wingL);
+      const wingR = wingL.clone();
+      wingR.position.x = 0.14;
+      wingR.rotation.z = -0.5;
+      sheng.add(wingR);
+
+      const jaw = new THREE.Group();
+      jaw.position.set(0, -0.06, 0.14);
+      head.add(jaw);
+      for (let i = 0; i < 6; i++) {
+        const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.12, 4), toothMat);
+        tooth.position.set((i - 2.5) * 0.065, -0.04, 0.06 + (i % 2) * 0.02);
+        tooth.rotation.x = Math.PI + (i - 2.5) * 0.08;
+        jaw.add(tooth);
+      }
+      const fangL = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.18, 4), toothMat);
+      fangL.position.set(-0.08, -0.1, 0.1);
+      fangL.rotation.x = Math.PI - 0.15;
+      jaw.add(fangL);
+      const fangR = fangL.clone();
+      fangR.position.x = 0.08;
+      fangR.rotation.x = Math.PI - 0.15;
+      jaw.add(fangR);
+
+      const hair = new THREE.Group();
+      hair.position.y = 0.12;
+      head.add(hair);
+      for (let i = 0; i < 7; i++) {
+        const lock = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.008, 0.35 + (i % 2) * 0.1, 4), new THREE.MeshStandardMaterial({ color: 0x1a1018 }));
+        lock.position.set((i - 3) * 0.05, 0.05, -0.08 - (i % 2) * 0.04);
+        lock.rotation.x = 0.4 + (i % 3) * 0.1;
+        hair.add(lock);
+      }
+
+      const tail = new THREE.Group();
+      tail.position.set(0, 0.35, -0.28);
+      figure.add(tail);
+      for (let i = 0; i < 7; i++) {
+        const seg = new THREE.Mesh(new THREE.SphereGeometry(0.09 - i * 0.008, 8, 6), leopardMat);
+        seg.position.set(Math.sin(i * 0.35) * 0.08, 0.02, -i * 0.2);
+        seg.scale.set(1, 0.7, 1.15);
+        tail.add(seg);
+        for (let s = 0; s < 2; s++) {
+          const spot = new THREE.Mesh(new THREE.SphereGeometry(0.035, 5, 4), spotMat);
+          spot.position.set(0.05 + s * 0.04, 0.05, -i * 0.2);
+          tail.add(spot);
+        }
+      }
+
+      const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.42, 8), robeInner);
+      armLMesh.position.set(-0.36, 0.58, 0.06);
+      armLMesh.rotation.z = 0.45;
+      figure.add(armLMesh);
+      const armRMesh = armLMesh.clone();
+      armRMesh.position.x = 0.36;
+      armRMesh.rotation.z = -0.45;
+      figure.add(armRMesh);
+
+      const handL = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), skin);
+      handL.position.set(-0.48, 0.42, 0.12);
+      figure.add(handL);
+      const handR = handL.clone();
+      handR.position.set(0.48, 0.42, 0.12);
+      figure.add(handR);
+
+      group.add(root);
+      const label = TerrainGen._makeNameSprite('西王母', '#f0c8e8');
+      label.position.set(0, 4.8, 0);
+      label.scale.set(10, 2.5, 1);
+      root.add(label);
+
+      return { root, model, figure, tail, jaw, sheng, head, phase: 0 };
+    },
+
+    update(npc, dt) {
+      if (!npc) return;
+      npc.phase += dt;
+      npc.figure.position.y = 0.22 + Math.sin(npc.phase * 1.2) * 0.015;
+      npc.tail.rotation.y = Math.sin(npc.phase * 0.85) * 0.22;
+      npc.tail.rotation.x = Math.sin(npc.phase * 0.6) * 0.08;
+      npc.jaw.rotation.x = Math.sin(npc.phase * 0.55) * 0.04;
+      npc.sheng.rotation.y = Math.sin(npc.phase * 0.7) * 0.1;
+      npc.head.rotation.y = Math.sin(npc.phase * 0.45) * 0.05;
+    },
+  };
+
+  const XingxingNPC = {
+    spawnAll(group, gridY, sampleHeight) {
+      const list = [];
+      for (let t = 0; t < 160 && list.length < 14; t++) {
+        const ang = hash2(t, 211) * Math.PI * 2;
+        const rad = (0.35 + hash2(t, 97) * 0.55) * NANSHAN.floraRadius;
+        const x = NANSHAN.cx + Math.cos(ang) * rad * 0.9 + (hash2(t, 401) - 0.5) * 5;
+        const z = lerp(NANSHAN.cz - 22, NANSHAN.peakZ - 14, hash2(t, 131)) + (hash2(t, 67) - 0.5) * 8;
+        if (!isValidXingxingPos(x, z, sampleHeight)) continue;
+        list.push(this._spawnOne(group, gridY, sampleHeight, x, z, list.length));
+      }
+      for (let t = 0; t < 280 && list.length < 32; t++) {
+        const x = NANSHAN.peakX + (hash2(t, 811) - 0.5) * 32;
+        const z = lerp(NANSHAN.cz + 6, NANSHAN.peakZ - 4, hash2(t, 812)) + (hash2(t, 813) - 0.5) * 10;
+        if (!isValidXingxingMountainPos(x, z, sampleHeight)) continue;
+        const tooClose = list.some(npc => Math.hypot(npc.homeX - x, npc.homeZ - z) < 4.5);
+        if (tooClose) continue;
+        list.push(this._spawnOne(group, gridY, sampleHeight, x, z, list.length + t));
+      }
+      return list;
+    },
+
+    _spawnOne(group, gridY, sampleHeight, x, z, seed) {
+      const root = new THREE.Group();
+      root.name = 'xingxing';
+      const gy = gridY + sampleHeight(x, z);
+      root.position.set(x, gy, z);
+
+      const fur = new THREE.MeshStandardMaterial({ color: 0x6a5038, roughness: 0.82 });
+      const pale = new THREE.MeshStandardMaterial({ color: 0xf0ece4, roughness: 0.72 });
+      const face = new THREE.MeshStandardMaterial({ color: 0x5a4430, roughness: 0.8 });
+
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 10, 8), fur);
+      body.scale.set(0.95, 1.0, 0.82);
+      body.position.y = 0.58;
+      root.add(body);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), fur);
+      head.position.y = 1.02;
+      root.add(head);
+
+      const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), face);
+      muzzle.position.set(0, 0.92, 0.22);
+      root.add(muzzle);
+
+      const earL = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), pale);
+      earL.scale.set(0.55, 1.15, 0.32);
+      earL.position.set(-0.26, 1.22, 0.04);
+      root.add(earL);
+      const earR = earL.clone();
+      earR.position.x = 0.26;
+      root.add(earR);
+
+      const armL = new THREE.Group();
+      armL.position.set(-0.34, 0.72, 0);
+      root.add(armL);
+      const armLL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 6), fur);
+      armLL.position.y = -0.18;
+      armL.add(armLL);
+
+      const armR = new THREE.Group();
+      armR.position.set(0.34, 0.72, 0);
+      root.add(armR);
+      const armRL = armLL.clone();
+      armR.add(armRL);
+
+      const legL = new THREE.Group();
+      legL.position.set(-0.18, 0.18, 0);
+      root.add(legL);
+      const legLL = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.38, 6), fur);
+      legLL.position.y = -0.16;
+      legL.add(legLL);
+
+      const legR = new THREE.Group();
+      legR.position.set(0.18, 0.18, 0);
+      root.add(legR);
+      const legRL = legLL.clone();
+      legR.add(legRL);
+
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.07, 0.55, 5), fur);
+      tail.position.set(0, 0.42, -0.28);
+      tail.rotation.x = 0.7;
+      root.add(tail);
+
+      group.add(root);
+
+      return {
+        root, body, head, armL, armR, legL, legR, tail,
+        gridY, sampleHeight,
+        phase: seed * 2.1,
+        hopT: hash2(seed, 31) * 4,
+        dir: hash2(seed, 53) * Math.PI * 2,
+        speed: 1.1 + hash2(seed, 71) * 0.9,
+        homeX: x, homeZ: z,
+      };
+    },
+
+    update(list, dt, playerPos) {
+      if (!list?.length) return;
+      if (nanshanMask(playerPos.x, playerPos.z) < 0.08) return;
+      list.forEach(npc => {
+        npc.hopT += dt * npc.speed * 3.6;
+        npc.wanderT = (npc.wanderT ?? 0) - dt;
+        npc._groundT = (npc._groundT ?? 0) - dt;
+        const hop = Math.max(0, Math.sin(npc.hopT * 5.5));
+        const moving = hop > 0.25;
+        const spd = moving ? 1.5 * npc.speed : 0.08;
+
+        let gx = npc.root.position.x;
+        let gz = npc.root.position.z;
+        const nx = gx + Math.cos(npc.dir) * dt * spd;
+        const nz = gz + Math.sin(npc.dir) * dt * spd;
+
+        const onPeak = npc.sampleHeight(npc.homeX, npc.homeZ) > 11.5;
+        const canMove = onPeak
+          ? isValidXingxingMountainPos(nx, nz, npc.sampleHeight)
+          : isValidXingxingPos(nx, nz, npc.sampleHeight);
+        if (canMove) {
+          gx = nx;
+          gz = nz;
+        } else {
+          npc.dir = Math.atan2(npc.homeX - gx, npc.homeZ - gz) + (hash2(npc.phase, npc.hopT) - 0.5) * 0.6;
+        }
+
+        if (npc.wanderT <= 0) {
+          npc.wanderT = 2 + hash2(npc.phase, npc.hopT * 3) * 3;
+          npc.dir += (hash2(npc.hopT, npc.phase) - 0.5) * 0.8;
+        }
+
+        npc.root.position.x = gx;
+        npc.root.position.z = gz;
+        if (npc._groundT <= 0) {
+          npc._cachedGround = npc.gridY + npc.sampleHeight(gx, gz);
+          npc._groundT = 0.25;
+        }
+        npc.root.position.y = npc._cachedGround + hop * 0.75;
+        npc.root.rotation.y = npc.dir;
+
+        npc.body.position.y = 0.58 + hop * 0.12;
+        npc.head.position.y = 1.02 + hop * 0.08;
+        npc.armL.rotation.x = moving ? -hop * 1.2 : Math.sin(npc.phase + npc.hopT) * 0.15;
+        npc.armR.rotation.x = moving ? hop * 1.2 : -Math.sin(npc.phase + npc.hopT) * 0.15;
+        npc.legL.rotation.x = moving ? hop * 1.4 : 0;
+        npc.legR.rotation.x = moving ? -hop * 1.4 : 0;
+        npc.tail.rotation.y = Math.sin(npc.hopT * 3) * 0.35;
+        npc.phase += dt;
+      });
+    },
+  };
+
+  function addInstanced(group, items, color, kind, scaleMul) {
+    if (!items.length) return;
+    let geo;
+    if (kind === 'cone') geo = new THREE.ConeGeometry(0.35, 1.6, 6);
+    else geo = new THREE.DodecahedronGeometry(0.45, 0);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.88 });
+    const mesh = new THREE.InstancedMesh(geo, mat, items.length);
+    const m = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3();
+    items.forEach((it, i) => {
+      const sc = it.s * scaleMul;
+      p.set(it.x, it.y + (kind === 'cone' ? sc * 0.8 : 0), it.z);
+      s.set(sc, sc, sc);
+      m.compose(p, q, s);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.castShadow = kind === 'cone' && scaleMul >= 1;
+    group.add(mesh);
+  }
+
+  const GridEngine = {
+    mode: 'edit',
+    config: {
+      worldSize: WORLD_SIZE,
+      divisions: TERRAIN_RES,
+      cellSize: 1,
+      majorEvery: 10,
+      gridY: 0,
+      minorColor: 0x2a3848,
+      majorColor: 0x4a6888,
+      axisColor: 0xff8060,
+      showAxes: true,
+      showLabels: true,
+    },
+    _registry: new Map(),
+    _idCounter: 0,
+    _labelSprites: [],
+    _minimapRes: 120,
+    _colliders: [],
+    _host: null,
+    _clock: new THREE.Clock(),
+    _keys: {},
+    _rmbDown: false,
+    _lastMouseX: 0,
+    _lastMouseY: 0,
+    playerYaw: 0,
+    cameraYaw: Math.PI,
+    cameraPitch: 0.32,
+    cameraDistance: 5.5,
+    cameraDistanceMin: 2.6,
+    cameraDistanceMax: 13,
+    mouseSensitivity: 1,
+    _currentRegion: null,
+    _regionBannerTimer: null,
+    _camDistSmooth: 5.5,
+    _camPivotSmooth: 1.25,
+    _xingtian: null,
+    _xingxing: [],
+    _jingwei: null,
+    _jiuweihu: null,
+    _kunlunGod: null,
+    _xiwangmu: null,
+    _nanshanLoreDismissed: false,
+    _xingtianLoreDismissed: false,
+    _fusangLoreDismissed: false,
+    _jingweiLoreDismissed: false,
+    _qingqiuLoreDismissed: false,
+    _kunlunLoreDismissed: false,
+
+    player: {
+      pos: new THREE.Vector3(SPAWN.x, 8, SPAWN.z),
+      vel: new THREE.Vector3(),
+      radius: 0.38,
+      height: 1.65,
+      onGround: false,
+      inWater: false,
+      swimming: false,
+      speed: 8.5,
+      sprint: 13,
+      swimSpeed: 4.5,
+      jump: 8.5,
+      gravity: 22,
+      mesh: null,
+    },
+
+    init(host = document.getElementById('canvas-host')) {
+      this._host = host;
+      const size = this.config.worldSize;
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xc8a878);
+      scene.fog = new THREE.Fog(0xd8c8a8, 110, 520);
+
+      const camera = new THREE.PerspectiveCamera(60, host.clientWidth / host.clientHeight, 0.1, 1000);
+      camera.position.set(size * 0.55, 42, size * 0.72);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+      renderer.setSize(host.clientWidth, host.clientHeight);
+      renderer.shadowMap.enabled = false;
+      host.appendChild(renderer.domElement);
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.target.set(size * 0.5, 6, size * 0.5);
+
+      const hemi = new THREE.HemisphereLight(0xffecd0, 0x4a5838, 0.78);
+      scene.add(hemi);
+      const sun = new THREE.DirectionalLight(0xffe0a8, 1.15);
+      sun.position.set(size * 0.6, 55, size * 0.35);
+      sun.castShadow = false;
+      scene.add(sun);
+
+      const gridGroup = new THREE.Group();
+      const terrainGroup = new THREE.Group();
+      const landmarksGroup = new THREE.Group();
+      const objectsGroup = new THREE.Group();
+      scene.add(gridGroup, terrainGroup, landmarksGroup, objectsGroup);
+
+      this._scene = scene;
+      this._camera = camera;
+      this._renderer = renderer;
+      this._controls = controls;
+      this._gridGroup = gridGroup;
+      this._terrainGroup = terrainGroup;
+      this._landmarksGroup = landmarksGroup;
+      this._objectsGroup = objectsGroup;
+      this._camDistSmooth = this.cameraDistance;
+      this._camPivotSmooth = 1.25;
+      this._hemiLight = hemi;
+      this._sunLight = sun;
+      this._fogBase = new THREE.Color(0xd8c8a8);
+      this._fogNanshan = new THREE.Color(0xc8e0a8);
+      this._bgBase = new THREE.Color(0xc8a878);
+      this._bgNanshan = new THREE.Color(0xa8c878);
+      this._sunBase = new THREE.Color(0xffe0a8);
+      this._sunNanshan = new THREE.Color(0xe8f0a0);
+      this._hemiSkyBase = new THREE.Color(0xffecd0);
+      this._hemiSkyNanshan = new THREE.Color(0xe8f8c0);
+      this._nanshanBlend = 0;
+      this._fpsAcc = 0;
+      this._fpsFrames = 0;
+
+      this._buildTerrain();
+      this._spawnLandmarks();
+      this._buildMinimap();
+      this._rebuildGrid();
+      this._createPlayer();
+      this._bindInput(host);
+      this._rebuildColliders();
+      this._bindUI();
+
+      window.addEventListener('resize', () => this._onResize(host));
+      this._animate();
+      this.enterEdit();
+      return this;
+    },
+
+    _buildTerrain() {
+      const { worldSize, divisions, gridY } = this.config;
+      TerrainGen.buildHeightfield(divisions, worldSize);
+      TerrainGen.buildMeshes(this._terrainGroup, gridY);
+      this._buildMinimap();
+      this._rebuildColliders();
+    },
+
+    _spawnLandmarks() {
+      if (!this._landmarksGroup) return;
+      while (this._landmarksGroup.children.length) {
+        const c = this._landmarksGroup.children[0];
+        this._landmarksGroup.remove(c);
+        c.traverse?.(o => {
+          o.geometry?.dispose();
+          if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose());
+        });
+      }
+      const { gridY } = this.config;
+      const sample = (x, z) => TerrainGen.sample(x, z);
+      this._xingtian = XingtianNPC.spawn(this._landmarksGroup, gridY, sample);
+      this._xingxing = XingxingNPC.spawnAll(this._landmarksGroup, gridY, sample);
+      this._jingwei = JingweiNPC.spawn(this._landmarksGroup, gridY, sample);
+      this._jiuweihu = JiweiFoxNPC.spawn(this._landmarksGroup, gridY, sample);
+      this._kunlunGod = KunlunTigerGodNPC.spawn(this._landmarksGroup, gridY, sample);
+      this._xiwangmu = XiwangmuNPC.spawn(this._landmarksGroup, gridY, sample);
+    },
+
+    _buildMinimap() {
+      const canvas = document.getElementById('minimap-bg');
+      if (!canvas) return;
+      const res = this._minimapRes;
+      canvas.width = res;
+      canvas.height = res;
+      const ctx = canvas.getContext('2d');
+      const img = ctx.createImageData(res, res);
+      const ws = TerrainGen.size;
+      for (let j = 0; j < res; j++) {
+        for (let i = 0; i < res; i++) {
+          const x = (i / (res - 1)) * ws;
+          const z = (j / (res - 1)) * ws;
+          const h = TerrainGen.sample(x, z);
+          const idx = (j * res + i) * 4;
+          if (h < WATER_LEVEL - 0.05) {
+            img.data[idx] = 38; img.data[idx + 1] = 88; img.data[idx + 2] = 128; img.data[idx + 3] = 255;
+          } else if (h > 18) {
+            img.data[idx] = 210; img.data[idx + 1] = 215; img.data[idx + 2] = 220; img.data[idx + 3] = 255;
+          } else if (h > 10) {
+            img.data[idx] = 95; img.data[idx + 1] = 90; img.data[idx + 2] = 82; img.data[idx + 3] = 255;
+          } else if (h > 6) {
+            img.data[idx] = 62; img.data[idx + 1] = 118; img.data[idx + 2] = 48; img.data[idx + 3] = 255;
+          } else {
+            img.data[idx] = 78; img.data[idx + 1] = 138; img.data[idx + 2] = 58; img.data[idx + 3] = 255;
+          }
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    },
+
+    _updateMinimap() {
+      this._mmTick = (this._mmTick ?? 0) + 1;
+      if (this._mmTick % 3 !== 0) return;
+      const canvas = document.getElementById('minimap-overlay');
+      if (!canvas) return;
+      const res = this._minimapRes;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, res, res);
+      const ws = TerrainGen.size;
+      const p = this.player.pos;
+      const px = (p.x / ws) * res;
+      const py = (p.z / ws) * res;
+      const yaw = this.playerYaw;
+      const len = 14;
+      const tipX = px + Math.sin(yaw) * len;
+      const tipY = py + Math.cos(yaw) * len;
+      const wing = 5;
+      const lx = px + Math.sin(yaw - 2.4) * wing;
+      const ly = py + Math.cos(yaw - 2.4) * wing;
+      const rx = px + Math.sin(yaw + 2.4) * wing;
+      const ry = py + Math.cos(yaw + 2.4) * wing;
+      ctx.fillStyle = '#ffe8a0';
+      ctx.strokeStyle = '#3a2810';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(lx, ly);
+      ctx.lineTo(rx, ry);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff8e0';
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      const fx = (FUSANG.cx / ws) * res;
+      const fy = (FUSANG.cz / ws) * res;
+      if (Math.hypot(px - fx, py - fy) < 18) {
+        ctx.strokeStyle = 'rgba(255, 208, 128, 0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(fx, fy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    },
+
+    _togglePanel() {
+      const wrap = document.getElementById('panel-wrap');
+      const btn = document.getElementById('panel-toggle');
+      const collapsed = wrap.classList.toggle('collapsed');
+      btn.innerHTML = collapsed ? '▶<br>show' : '◀<br>hide';
+    },
+
+    _getGroundHeightAt(x, z) {
+      return this.config.gridY + TerrainGen.sample(x, z);
+    },
+
+    _getWaterState(x, z, playerY) {
+      const ground = this._getGroundHeightAt(x, z);
+      const surface = this.config.gridY + WATER_LEVEL;
+      const feet = playerY;
+
+      if (ground >= surface - 0.1) return { inWater: false };
+      if (feet > surface - 0.12) return { inWater: false };
+
+      const depth = surface - ground;
+      const bodyInWater = feet < surface - 0.35;
+      const onBottom = feet - ground < 0.4;
+      const swimming = bodyInWater && !onBottom && depth > 0.5;
+      const wading = bodyInWater && !swimming;
+      return { inWater: true, depth, surface, ground, swimming, wading };
+    },
+
+    _getRegion(px, pz) {
+      const { cx, cz, radius } = ISLAND;
+      const dx = px - cx;
+      const dz = pz - cz;
+      const dist = Math.hypot(dx, dz);
+      const cdist = dist;
+
+      if (dist < radius * 0.98) {
+        if (Math.hypot(px - JIUWEIHU.x, pz - JIUWEIHU.z) < 18) return JIUWEIHU.id;
+        if (nanshanMask(px, pz) > 0.18) return NANSHAN.id;
+        let best = null;
+        let bestD = Infinity;
+        for (const m of ISLAND_MOUNTAINS) {
+          if (!m.id) continue;
+          const d = Math.hypot(px - m.cx, pz - m.cz);
+          if (d < m.spread * 1.2 && d < bestD) {
+            bestD = d;
+            best = m.id;
+          }
+        }
+        return best;
+      }
+
+      if (Math.hypot(px - FUSANG.cx, pz - FUSANG.cz) < FUSANG.poolRadius * 1.08) return FUSANG.id;
+      if (kunlunMask(px, pz) > 0.12) return KUNLUN.id;
+      if (Math.hypot(px - XINGTIAN.x, pz - XINGTIAN.z) < 18) return XINGTIAN.id;
+
+      if (cdist >= DAHUANG_START - 4) {
+        if (Math.abs(dz) >= Math.abs(dx)) return dz < 0 ? '大荒北' : '大荒南';
+        return dx < 0 ? '大荒西' : '大荒東';
+      }
+
+      const northW = pz < cz - radius * 0.15;
+      const southW = pz > cz + radius * 0.15;
+      const eastW = px > cx + radius * 0.15;
+      const westW = px < cx - radius * 0.15;
+
+      if (northW && !eastW && !westW) return '海外北';
+      if (southW && !eastW && !westW) return '海外南';
+      if (eastW && !northW && !southW) return '海外東';
+      if (westW && !northW && !southW) return '海外西';
+
+      if (Math.abs(dz) >= Math.abs(dx)) return dz < 0 ? '海外北' : '海外南';
+      return dx < 0 ? '海外西' : '海外東';
+    },
+
+    _getLocationName(px, pz) {
+      return this._getRegion(px, pz) ?? '山海';
+    },
+
+    _showRegionBanner(name) {
+      if (!name || name === this._currentRegion) return;
+      this._currentRegion = name;
+      const el = document.getElementById('region-banner');
+      el.textContent = name;
+      el.classList.add('show');
+      clearTimeout(this._regionBannerTimer);
+      this._regionBannerTimer = setTimeout(() => el.classList.remove('show'), 4200);
+    },
+
+    _showNanshanLore() {
+      document.getElementById('nanshan-lore').classList.add('show');
+    },
+
+    _hideNanshanLore() {
+      document.getElementById('nanshan-lore').classList.remove('show');
+    },
+
+    _showXingtianLore() {
+      document.getElementById('xingtian-lore').classList.add('show');
+    },
+
+    _hideXingtianLore() {
+      document.getElementById('xingtian-lore').classList.remove('show');
+    },
+
+    _showFusangLore() {
+      document.getElementById('fusang-lore').classList.add('show');
+    },
+
+    _hideFusangLore() {
+      document.getElementById('fusang-lore').classList.remove('show');
+    },
+
+    _showJingweiLore() {
+      document.getElementById('jingwei-lore').classList.add('show');
+    },
+
+    _hideJingweiLore() {
+      document.getElementById('jingwei-lore').classList.remove('show');
+    },
+
+    _showQingqiuLore() {
+      document.getElementById('qingqiu-lore').classList.add('show');
+    },
+
+    _hideQingqiuLore() {
+      document.getElementById('qingqiu-lore').classList.remove('show');
+    },
+
+    _showKunlunLore() {
+      document.getElementById('kunlun-lore').classList.add('show');
+    },
+
+    _hideKunlunLore() {
+      document.getElementById('kunlun-lore').classList.remove('show');
+    },
+
+    _hideAllLorePanels() {
+      this._hideNanshanLore();
+      this._hideXingtianLore();
+      this._hideFusangLore();
+      this._hideJingweiLore();
+      this._hideQingqiuLore();
+      this._hideKunlunLore();
+    },
+
+    _checkRegionChange() {
+      const name = this._getRegion(this.player.pos.x, this.player.pos.z);
+      const prev = this._currentRegion;
+      if (name) this._showRegionBanner(name);
+
+      if (prev === NANSHAN.id && name !== NANSHAN.id) this._nanshanLoreDismissed = false;
+      if (prev === '刑天' && name !== '刑天') this._xingtianLoreDismissed = false;
+      if (prev === '扶桑' && name !== '扶桑') this._fusangLoreDismissed = false;
+      if (prev === '北山' && name !== '北山') this._jingweiLoreDismissed = false;
+      if (prev === '青丘' && name !== '青丘') this._qingqiuLoreDismissed = false;
+      if (prev === KUNLUN.id && name !== KUNLUN.id) this._kunlunLoreDismissed = false;
+
+      if (name !== NANSHAN.id) this._hideNanshanLore();
+      if (name !== '刑天') this._hideXingtianLore();
+      if (name !== '扶桑') this._hideFusangLore();
+      if (name !== '北山') this._hideJingweiLore();
+      if (name !== '青丘') this._hideQingqiuLore();
+      if (name !== KUNLUN.id) this._hideKunlunLore();
+
+      if (name === NANSHAN.id && !this._nanshanLoreDismissed) this._showNanshanLore();
+      if (name === '刑天' && !this._xingtianLoreDismissed) this._showXingtianLore();
+      if (name === '扶桑' && !this._fusangLoreDismissed) this._showFusangLore();
+      if (name === '北山' && !this._jingweiLoreDismissed) this._showJingweiLore();
+      if (name === '青丘' && !this._qingqiuLoreDismissed) this._showQingqiuLore();
+      if (name === KUNLUN.id && !this._kunlunLoreDismissed) this._showKunlunLore();
+    },
+
+    gridToWorld(ix, iy, iz) {
+      const { cellSize, gridY } = this.config;
+      return { x: ix * cellSize, y: gridY + iy * cellSize, z: iz * cellSize };
+    },
+
+    worldToGrid(x, y, z) {
+      const { cellSize, gridY } = this.config;
+      return {
+        x: Math.round(x / cellSize),
+        y: Math.round((y - gridY) / cellSize),
+        z: Math.round(z / cellSize),
+      };
+    },
+
+    setGrid(partial) {
+      Object.assign(this.config, partial);
+      this._rebuildGrid();
+      return this.config;
+    },
+
+    enterPlay() {
+      Soundscape.resume();
+      this.mode = 'play';
+      this._controls.enabled = false;
+      this._host.classList.add('playing');
+      document.getElementById('overlay').classList.remove('show');
+      if (this._gridGroup) this._gridGroup.visible = false;
+      this.player.vel.set(0, 0, 0);
+      this._snapPlayCamera();
+      document.getElementById('hud-mode').textContent = 'play';
+      this._currentRegion = null;
+      this._checkRegionChange();
+    },
+
+    enterEdit() {
+      this.mode = 'edit';
+      this._controls.enabled = true;
+      this._host.classList.remove('playing');
+      if (this._gridGroup) this._gridGroup.visible = true;
+      this._rmbDown = false;
+      document.getElementById('hud-mode').textContent = 'edit';
+    },
+
+    _snapPlayCamera() {
+      const p = this.player;
+      const pivotY = p.pos.y + 1.25;
+      const dist = 5.5;
+      const cosP = Math.cos(this.cameraPitch);
+      const sinP = Math.sin(this.cameraPitch);
+      this._camera.position.set(
+        p.pos.x + Math.sin(this.cameraYaw) * cosP * dist,
+        pivotY + sinP * dist,
+        p.pos.z + Math.cos(this.cameraYaw) * cosP * dist,
+      );
+      this._camera.lookAt(p.pos.x, pivotY, p.pos.z);
+    },
+
+    _rebuildGrid() {
+      const g = this._gridGroup;
+      while (g.children.length) g.remove(g.children[0]);
+      this._labelSprites.forEach(s => s.material.map?.dispose());
+      this._labelSprites = [];
+
+      const { worldSize, divisions, cellSize, majorEvery, gridY, minorColor, majorColor, axisColor, showAxes, showLabels } = this.config;
+      const cx = worldSize * 0.5;
+
+      const gridHelper = new THREE.GridHelper(worldSize, divisions, majorColor, minorColor);
+      gridHelper.position.set(cx, gridY + 0.02, cx);
+      g.add(gridHelper);
+
+      if (showAxes) {
+        const axes = new THREE.AxesHelper(worldSize * 0.35);
+        axes.position.set(0, gridY, 0);
+        g.add(axes);
+      }
+
+      if (showLabels) {
+        const cells = Math.round(worldSize / cellSize);
+        for (let i = 0; i <= cells; i += majorEvery) {
+          this._addLabel(`${i}`, i * cellSize, gridY + 0.05, -cellSize * 0.5, axisColor);
+        }
+        for (let i = 0; i <= cells; i += majorEvery) {
+          this._addLabel(`${i}`, -cellSize * 0.5, gridY + 0.05, i * cellSize, axisColor);
+        }
+      }
+    },
+
+    _addLabel(text, x, y, z, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 32;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = `#${new THREE.Color(color).getHexString()}`;
+      ctx.font = '22px monospace';
+      ctx.fillText(text, 4, 22);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const spr = new THREE.Sprite(mat);
+      spr.position.set(x, y, z);
+      spr.scale.set(2.5, 1.25, 1);
+      this._gridGroup.add(spr);
+      this._labelSprites.push(spr);
+    },
+
+    _createPlayer() {
+      const body = new THREE.Group();
+      const skin = new THREE.MeshStandardMaterial({ color: 0xd8b890, roughness: 0.62 });
+      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.75, 6, 10), skin);
+      torso.position.y = 0.95;
+      torso.castShadow = true;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), skin);
+      head.position.y = 1.55;
+      head.castShadow = true;
+      const visor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.1, 0.18),
+        new THREE.MeshStandardMaterial({ color: 0x2a1810, roughness: 0.35, metalness: 0.15 }),
+      );
+      visor.position.set(0, 1.55, 0.14);
+      body.add(torso, head, visor);
+
+      this._scene.add(body);
+      this.player.mesh = body;
+      this._placePlayerAtSpawn();
+      this.cameraYaw = Math.PI * 0.85;
+      this.cameraPitch = 0.28;
+    },
+
+    _placePlayerAtSpawn() {
+      const gy = this._getGroundHeightAt(SPAWN.x, SPAWN.z);
+      this.player.pos.set(SPAWN.x, gy + 0.05, SPAWN.z);
+      this.player.mesh.position.copy(this.player.pos);
+    },
+
+    _bindInput(host) {
+      const setKey = (e, down) => {
+        this._keys[e.code] = down;
+        if (this.mode === 'play' && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+          e.preventDefault();
+        }
+        if (e.code === 'Escape' && down) this.enterEdit();
+        if (e.code === 'Backquote' && down) this._togglePanel();
+      };
+      window.addEventListener('keydown', e => setKey(e, true));
+      window.addEventListener('keyup', e => setKey(e, false));
+
+      host.addEventListener('contextmenu', e => {
+        if (this.mode === 'play') e.preventDefault();
+      });
+
+      const isOrbitButton = e => e.button === 2 || (e.button === 0 && e.ctrlKey);
+      host.addEventListener('mousedown', e => {
+        if (this.mode !== 'play' || !isOrbitButton(e)) return;
+        e.preventDefault();
+        this._rmbDown = true;
+        this._lastMouseX = e.clientX;
+        this._lastMouseY = e.clientY;
+      });
+      window.addEventListener('mouseup', e => {
+        if (!this._rmbDown) return;
+        if (e.button === 2 || e.button === 0) this._rmbDown = false;
+      });
+      window.addEventListener('blur', () => { this._rmbDown = false; });
+
+      host.addEventListener('mousemove', e => {
+        if (this.mode !== 'play' || !this._rmbDown) return;
+        const dx = e.clientX - this._lastMouseX;
+        const dy = e.clientY - this._lastMouseY;
+        this._lastMouseX = e.clientX;
+        this._lastMouseY = e.clientY;
+        const sens = this.mouseSensitivity * 0.005;
+        this.cameraYaw -= dx * sens;
+        this.cameraPitch = THREE.MathUtils.clamp(this.cameraPitch + dy * sens, 0.08, 1.25);
+      });
+
+      host.addEventListener('wheel', e => {
+        if (this.mode !== 'play') return;
+        e.preventDefault();
+        const delta = e.deltaY * 0.004;
+        this.cameraDistance = THREE.MathUtils.clamp(
+          this.cameraDistance + delta,
+          this.cameraDistanceMin,
+          this.cameraDistanceMax,
+        );
+        const zoomEl = document.getElementById('cfg-zoom');
+        if (zoomEl) {
+          zoomEl.value = this.cameraDistance.toFixed(1);
+          document.getElementById('cfg-zoom-val').textContent = this.cameraDistance.toFixed(1);
+        }
+        this.cameraPitch = THREE.MathUtils.clamp(
+          this.cameraPitch + delta * 0.06,
+          0.08,
+          1.25,
+        );
+      }, { passive: false });
+    },
+
+    _bindUI() {
+      document.getElementById('btn-play').onclick = () => this.enterPlay();
+      document.getElementById('btn-edit').onclick = () => this.enterEdit();
+      document.getElementById('overlay').onclick = () => this.enterPlay();
+      document.getElementById('nanshan-lore-close').onclick = () => {
+        this._nanshanLoreDismissed = true;
+        this._hideNanshanLore();
+      };
+      document.getElementById('xingtian-lore-close').onclick = () => {
+        this._xingtianLoreDismissed = true;
+        this._hideXingtianLore();
+      };
+      document.getElementById('fusang-lore-close').onclick = () => {
+        this._fusangLoreDismissed = true;
+        this._hideFusangLore();
+      };
+      document.getElementById('jingwei-lore-close').onclick = () => {
+        this._jingweiLoreDismissed = true;
+        this._hideJingweiLore();
+      };
+      document.getElementById('qingqiu-lore-close').onclick = () => {
+        this._qingqiuLoreDismissed = true;
+        this._hideQingqiuLore();
+      };
+      document.getElementById('kunlun-lore-close').onclick = () => {
+        this._kunlunLoreDismissed = true;
+        this._hideKunlunLore();
+      };
+
+      const sens = document.getElementById('cfg-mouseSens');
+      sens.oninput = () => {
+        this.mouseSensitivity = +sens.value;
+        document.getElementById('cfg-sens-val').textContent = (+sens.value).toFixed(1);
+      };
+
+      const zoom = document.getElementById('cfg-zoom');
+      zoom.oninput = () => {
+        this.cameraDistance = +zoom.value;
+        document.getElementById('cfg-zoom-val').textContent = (+zoom.value).toFixed(1);
+      };
+
+      document.getElementById('btn-apply').onclick = () => {
+        this.config.worldSize = +document.getElementById('cfg-worldSize').value;
+        this.config.divisions = +document.getElementById('cfg-divisions').value;
+        this.config.cellSize = +document.getElementById('cfg-cellSize').value;
+        this.config.majorEvery = +document.getElementById('cfg-majorEvery').value;
+        this.config.gridY = +document.getElementById('cfg-gridY').value;
+        this.setGrid({});
+        this._buildTerrain();
+        this._rebuildColliders();
+      };
+
+      document.getElementById('btn-regen').onclick = () => {
+        this._buildTerrain();
+        this._spawnLandmarks();
+        this._placePlayerAtSpawn();
+        this._rebuildColliders();
+      };
+
+      document.getElementById('panel-toggle').onclick = () => this._togglePanel();
+
+      document.getElementById('btn-add').onclick = () => {
+        const color = document.getElementById('add-color').value;
+        this.add(
+          +document.getElementById('add-x').value,
+          +document.getElementById('add-y').value,
+          +document.getElementById('add-z').value,
+          {
+            shape: document.getElementById('add-shape').value,
+            color: parseInt(color.slice(1), 16),
+            solid: document.getElementById('add-solid').checked,
+          },
+        );
+      };
+      document.getElementById('btn-clear').onclick = () => this.clear();
+    },
+
+    _makeShape(type, color, size = 1) {
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.08 });
+      let mesh;
+      switch (type) {
+        case 'sphere':
+          mesh = new THREE.Mesh(new THREE.SphereGeometry(size * 0.45, 16, 12), mat);
+          break;
+        case 'cylinder':
+          mesh = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.35, size * 0.35, size, 14), mat);
+          break;
+        case 'marker':
+          mesh = new THREE.Mesh(new THREE.ConeGeometry(size * 0.3, size * 0.8, 10), mat);
+          mesh.rotation.x = Math.PI;
+          mesh.position.y = size * 0.4;
+          break;
+        default:
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), mat);
+      }
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      return mesh;
+    },
+
+    add(x, y, z, opts = {}) {
+      const id = opts.id ?? `obj_${++this._idCounter}`;
+      if (this._registry.has(id)) this.remove(id);
+
+      let wx = x, wy = y, wz = z;
+      if (opts.snapToGrid) {
+        const g = this.worldToGrid(x, y, z);
+        const w = this.gridToWorld(g.x, g.y, g.z);
+        wx = w.x; wy = w.y; wz = w.z;
+      }
+
+      const shape = opts.type || opts.shape || 'box';
+      const solid = opts.solid ?? shape !== 'marker';
+      const size = opts.size ?? 1;
+
+      const group = new THREE.Group();
+      group.name = id;
+      group.position.set(wx, wy, wz);
+      group.userData = { id, solid, size, shape, opts };
+
+      if (opts.object instanceof THREE.Object3D) {
+        group.add(opts.object);
+      } else {
+        group.add(this._makeShape(shape, opts.color ?? 0xffd080, size));
+      }
+
+      this._objectsGroup.add(group);
+      this._registry.set(id, group);
+      this._rebuildColliders();
+      this._refreshObjectList();
+      return id;
+    },
+
+    remove(id) {
+      const obj = this._registry.get(id);
+      if (!obj) return false;
+      this._objectsGroup.remove(obj);
+      obj.traverse(c => {
+        c.geometry?.dispose();
+        if (c.material) (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m.dispose());
+      });
+      this._registry.delete(id);
+      this._rebuildColliders();
+      this._refreshObjectList();
+      return true;
+    },
+
+    get(id) { return this._registry.get(id) ?? null; },
+    list() {
+      return [...this._registry.entries()].map(([id, g]) => ({
+        id, position: g.position.clone(), opts: g.userData.opts,
+      }));
+    },
+    clear() { [...this._registry.keys()].forEach(id => this.remove(id)); },
+
+    _meshToCollider(mesh) {
+      const box = new THREE.Box3().setFromObject(mesh);
+      return { min: box.min.clone(), max: box.max.clone(), mesh };
+    },
+
+    _rebuildColliders() {
+      this._colliders = [];
+      const { worldSize, gridY } = this.config;
+      const wallH = 60;
+      const bounds = [
+        { min: [-2, gridY - 5, 0], max: [0, gridY + wallH, worldSize] },
+        { min: [worldSize, gridY - 5, 0], max: [worldSize + 2, gridY + wallH, worldSize] },
+        { min: [0, gridY - 5, -2], max: [worldSize, gridY + wallH, 0] },
+        { min: [0, gridY - 5, worldSize], max: [worldSize, gridY + wallH, worldSize + 2] },
+      ];
+      bounds.forEach(w => this._colliders.push({
+        min: new THREE.Vector3(...w.min), max: new THREE.Vector3(...w.max),
+      }));
+
+      this._registry.forEach(group => {
+        if (!group.userData.solid) return;
+        this._colliders.push(this._meshToCollider(group));
+      });
+
+      (TerrainGen.staticColliders || []).forEach(box => {
+        this._colliders.push({ min: box.min.clone(), max: box.max.clone() });
+      });
+
+      const box3 = new THREE.Box3();
+      (TerrainGen.solidColliderMeshes || []).forEach(mesh => {
+        if (!mesh.parent) return;
+        mesh.updateWorldMatrix(true, false);
+        box3.setFromObject(mesh);
+        box3.expandByScalar(0.12);
+        this._colliders.push({ min: box3.min.clone(), max: box3.max.clone() });
+      });
+    },
+
+    _playerAABB(pos = this.player.pos) {
+      const { radius, height } = this.player;
+      return aabbFromBox(pos, radius, height, radius);
+    },
+
+    _getCameraMoveBasis() {
+      const p = this.player.pos;
+      let fx = p.x - this._camera.position.x;
+      let fz = p.z - this._camera.position.z;
+      const len = Math.hypot(fx, fz);
+      if (len < 0.001) {
+        fx = -Math.sin(this.cameraYaw);
+        fz = -Math.cos(this.cameraYaw);
+      } else {
+        fx /= len;
+        fz /= len;
+      }
+      return {
+        forward: TMP_V3A.set(fx, 0, fz),
+        right: TMP_V3B.set(fz, 0, -fx),
+      };
+    },
+
+    _movePlayer(dt) {
+      const p = this.player;
+      const ws = this._getWaterState(p.pos.x, p.pos.z, p.pos.y);
+      p.inWater = ws.inWater;
+      p.swimming = ws.inWater && ws.swimming;
+
+      const baseSpeed = p.swimming ? p.swimSpeed : (this._keys.ShiftLeft || this._keys.ShiftRight ? p.sprint : p.speed);
+      const moveMul = ws.inWater && !p.swimming ? 0.65 : (p.swimming ? 0.85 : 1);
+
+      const { forward, right } = this._getCameraMoveBasis();
+      let ix = 0, iz = 0;
+      if (this._keys.KeyW || this._keys.ArrowUp) { ix += forward.x; iz += forward.z; }
+      if (this._keys.KeyS || this._keys.ArrowDown) { ix -= forward.x; iz -= forward.z; }
+      if (this._keys.KeyA || this._keys.ArrowLeft) { ix += right.x; iz += right.z; }
+      if (this._keys.KeyD || this._keys.ArrowRight) { ix -= right.x; iz -= right.z; }
+
+      const len = Math.hypot(ix, iz);
+      if (len > 0) {
+        ix = (ix / len) * baseSpeed * moveMul;
+        iz = (iz / len) * baseSpeed * moveMul;
+        this.playerYaw = Math.atan2(ix, iz);
+      }
+      p.vel.x = ix;
+      p.vel.z = iz;
+
+      const grav = p.swimming ? 5.5 : (ws.inWater ? 12 : p.gravity);
+      const canJump = p.onGround && !p.swimming;
+      if ((this._keys.Space) && canJump) {
+        p.vel.y = p.jump;
+        p.onGround = false;
+      }
+      if (p.swimming && this._keys.Space) {
+        p.vel.y += 16 * dt;
+      }
+      if (p.swimming && (this._keys.ControlLeft || this._keys.ControlRight)) {
+        p.vel.y -= 14 * dt;
+      }
+
+      p.vel.y -= grav * dt;
+
+      if (p.swimming) {
+        const target = ws.surface - 0.95;
+        p.vel.y += (target - p.pos.y) * 2.8 * dt;
+        p.vel.y *= 0.92;
+      } else if (ws.inWater && ws.wading) {
+        p.vel.y *= 0.85;
+      }
+
+      p.onGround = false;
+      const tryMove = (axis, delta) => {
+        if (Math.abs(delta) < 1e-6) return;
+        const next = p.pos.clone();
+        next[axis] += delta;
+        let box = this._playerAABB(next);
+        let total = delta;
+        for (const solid of this._colliders) {
+          const push = resolveAABB(box, solid, axis);
+          if (push === 0) continue;
+          if (axis === 'y' && push > 0 && delta < 0) p.onGround = true;
+          if (axis === 'y' && push < 0 && delta > 0) p.vel.y = 0;
+          next[axis] += push;
+          total += push;
+          box = this._playerAABB(next);
+        }
+        p.pos[axis] = next[axis];
+        if (axis === 'y' && Math.abs(total) < Math.abs(delta) * 0.5 && delta < 0) p.onGround = true;
+      };
+
+      tryMove('x', p.vel.x * dt);
+      tryMove('z', p.vel.z * dt);
+      tryMove('y', p.vel.y * dt);
+
+      const groundY = this._getGroundHeightAt(p.pos.x, p.pos.z);
+      if (!p.swimming) {
+        if (p.pos.y < groundY) {
+          p.pos.y = groundY;
+          p.vel.y = 0;
+          p.onGround = true;
+        } else if (p.onGround && p.pos.y <= groundY + 0.1) {
+          p.pos.y = groundY;
+          p.vel.y = 0;
+          p.onGround = true;
+        }
+      } else if (p.pos.y < groundY + 0.2) {
+        p.pos.y = groundY + 0.2;
+        p.vel.y = Math.max(p.vel.y, 0);
+      }
+
+      if (!p.swimming) {
+        let box = this._playerAABB(p.pos);
+        for (const solid of this._colliders) {
+          for (const axis of ['x', 'z']) {
+            const push = resolveAABB(box, solid, axis);
+            if (push === 0) continue;
+            p.pos[axis] += push;
+            box = this._playerAABB(p.pos);
+          }
+        }
+      }
+
+      const r = p.radius;
+      const sz = this.config.worldSize;
+      p.pos.x = THREE.MathUtils.clamp(p.pos.x, r, sz - r);
+      p.pos.z = THREE.MathUtils.clamp(p.pos.z, r, sz - r);
+
+      if (p.onGround && p.vel.y < 0 && !p.swimming) p.vel.y = 0;
+
+      p.mesh.position.copy(p.pos);
+      p.mesh.rotation.y = this.playerYaw;
+    },
+
+    _updatePlayCamera(dt) {
+      const p = this.player;
+      const swimMul = THREE.MathUtils.clamp(this.cameraDistance * 0.78, 2.4, 6);
+      const wadeMul = THREE.MathUtils.lerp(this.cameraDistance * 0.9, this.cameraDistance, 0.35);
+      let targetDist = this.cameraDistance;
+      let targetPivot = 1.25;
+      if (p.swimming) {
+        targetDist = swimMul;
+        targetPivot = 0.6;
+      } else if (p.inWater) {
+        targetDist = wadeMul;
+        targetPivot = THREE.MathUtils.lerp(0.82, 1.25, 0.45);
+      }
+
+      const blend = 1 - Math.exp(-5.5 * dt);
+      this._camDistSmooth += (targetDist - this._camDistSmooth) * blend;
+      this._camPivotSmooth += (targetPivot - this._camPivotSmooth) * blend;
+
+      const pivotY = p.pos.y + this._camPivotSmooth;
+      const dist = this._camDistSmooth;
+      const cosP = Math.cos(this.cameraPitch);
+      const sinP = Math.sin(this.cameraPitch);
+      const camY = pivotY + sinP * dist;
+      const swimMinY = this.config.gridY + WATER_LEVEL + 0.15;
+      const landMinY = pivotY + 0.4;
+      const minCamY = THREE.MathUtils.lerp(landMinY, swimMinY, p.swimming ? 1 : (p.inWater ? 0.35 : 0));
+      this._camera.position.set(
+        p.pos.x + Math.sin(this.cameraYaw) * cosP * dist,
+        Math.max(camY, minCamY),
+        p.pos.z + Math.cos(this.cameraYaw) * cosP * dist,
+      );
+      this._camera.lookAt(p.pos.x, pivotY, p.pos.z);
+    },
+
+    _refreshObjectList() {
+      const el = document.getElementById('object-list');
+      const items = this.list();
+      el.innerHTML = items.length
+        ? items.map(o => `<div>${o.id} @ ${o.position.x.toFixed(1)}, ${o.position.y.toFixed(1)}, ${o.position.z.toFixed(1)}</div>`).join('')
+        : '<div style="color:#5a6878;">(none)</div>';
+    },
+
+    _updateFps(dt) {
+      this._fpsAcc += dt;
+      this._fpsFrames += 1;
+      if (this._fpsAcc < 0.45) return;
+      const el = document.getElementById('hud-fps');
+      if (el) el.textContent = String(Math.round(this._fpsFrames / this._fpsAcc));
+      this._fpsAcc = 0;
+      this._fpsFrames = 0;
+    },
+
+    _updateNanshanAtmosphere(dt) {
+      const mask = nanshanMask(this.player.pos.x, this.player.pos.z);
+      if (mask < 0.04 && this._nanshanBlend < 0.02) return;
+      const target = mask > 0.15 ? Math.min(1, mask * 1.35) : 0;
+      this._nanshanBlend += (target - this._nanshanBlend) * (1 - Math.exp(-2.8 * dt));
+      const t = this._nanshanBlend;
+      const fog = this._scene.fog;
+      fog.near = lerp(110, 52, t);
+      fog.far = lerp(520, 300, t);
+      fog.color.copy(this._fogBase).lerp(this._fogNanshan, t);
+      this._scene.background.copy(this._bgBase).lerp(this._bgNanshan, t);
+      this._hemiLight.color.copy(this._hemiSkyBase).lerp(this._hemiSkyNanshan, t);
+      this._hemiLight.intensity = lerp(0.78, 0.95, t);
+      this._sunLight.color.copy(this._sunBase).lerp(this._sunNanshan, t);
+      this._sunLight.intensity = lerp(1.15, 1.05, t);
+    },
+
+    _updateHud() {
+      const p = this.player;
+      document.getElementById('hud-pos').textContent =
+        `${p.pos.x.toFixed(1)}, ${p.pos.y.toFixed(1)}, ${p.pos.z.toFixed(1)}`;
+      document.getElementById('hud-region').textContent = this._getLocationName(p.pos.x, p.pos.z);
+      const gEl = document.getElementById('hud-ground');
+      gEl.textContent = p.onGround ? 'yes' : 'no';
+      gEl.className = p.onGround ? 'on' : 'off';
+      const wEl = document.getElementById('hud-water');
+      if (p.swimming) { wEl.textContent = 'swimming'; wEl.className = 'swim'; }
+      else if (p.inWater) { wEl.textContent = 'wading'; wEl.className = 'swim'; }
+      else { wEl.textContent = 'no'; wEl.className = 'off'; }
+    },
+
+    _onResize(host) {
+      const w = host.clientWidth, h = host.clientHeight;
+      this._camera.aspect = w / h;
+      this._camera.updateProjectionMatrix();
+      this._renderer.setSize(w, h);
+    },
+
+    _animate() {
+      requestAnimationFrame(() => this._animate());
+      const dt = Math.min(this._clock.getDelta(), 0.05);
+      this._updateFps(dt);
+      if (this.mode === 'play') {
+        this._movePlayer(dt);
+        this._updatePlayCamera(dt);
+        this._updateNanshanAtmosphere(dt);
+        this._hudTick = (this._hudTick ?? 0) + 1;
+        if (this._hudTick % 4 === 0) this._updateHud();
+        this._updateMinimap();
+        this._checkRegionChange();
+        if (Math.hypot(this.player.pos.x - XINGTIAN.x, this.player.pos.z - XINGTIAN.z) < 95) {
+          XingtianNPC.update(this._xingtian, dt, this.player.pos);
+        }
+        XingxingNPC.update(this._xingxing, dt, this.player.pos);
+        if (Math.hypot(this.player.pos.x - JINGWEI.peakX, this.player.pos.z - JINGWEI.peakZ) < 140) {
+          JingweiNPC.update(this._jingwei, dt);
+        }
+        if (Math.hypot(this.player.pos.x - JIUWEIHU.x, this.player.pos.z - JIUWEIHU.z) < 90) {
+          JiweiFoxNPC.update(this._jiuweihu, dt, this.player.pos);
+        }
+        if (Math.hypot(this.player.pos.x - KUNLUN.cx, this.player.pos.z - KUNLUN.cz) < KUNLUN.alertRadius + 55) {
+          KunlunTigerGodNPC.update(this._kunlunGod, dt);
+          XiwangmuNPC.update(this._xiwangmu, dt);
+        }
+        const region = this._getRegion(this.player.pos.x, this.player.pos.z);
+        if (region === NANSHAN.id || region === KUNLUN.id || region === '扶桑' || region === '北山' || this.player.inWater) {
+          Soundscape.update(dt, this.player, region);
+        }
+      } else {
+        this._controls.update();
+      }
+      this._renderer.render(this._scene, this._camera);
+    },
+  };
+
+  window.GridEngine = GridEngine;
+  GridEngine.init();
+  </script>
+</body>
+</html>

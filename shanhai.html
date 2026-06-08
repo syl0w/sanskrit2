@@ -49,7 +49,7 @@
     button.primary { background: #3a2a18; border-color: #a87840; color: #f0d8a0; }
     button.primary:hover { background: #4a3820; }
     #nav-compass {
-      position: fixed; top: 12px; right: 12px; width: 156px; height: 156px;
+      position: fixed; top: 12px; right: 12px; width: 156px; height: 198px;
       pointer-events: none; z-index: 8;
     }
     #minimap-wrap {
@@ -58,9 +58,23 @@
       border: 2px solid rgba(200, 160, 80, 0.5);
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
       background: rgba(20, 30, 40, 0.9);
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    #minimap-wrap.tp-active {
+      cursor: crosshair;
+      border-color: rgba(232, 200, 120, 0.75);
+      box-shadow: 0 0 0 2px rgba(232, 200, 120, 0.25), 0 2px 12px rgba(0, 0, 0, 0.35);
     }
     #minimap-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
     #minimap-overlay { pointer-events: none; }
+    #minimap-tp-btn {
+      position: absolute; left: 9px; top: 144px; width: 138px;
+      padding: 5px 6px; font-size: 9px; line-height: 1.35; letter-spacing: 0.02em;
+      text-align: center; color: #c8d8e8; background: rgba(20, 30, 40, 0.92);
+      border: 1px solid rgba(180, 200, 220, 0.35); border-radius: 6px;
+      pointer-events: none; font-family: inherit;
+    }
     .compass-label {
       position: absolute; font-size: 13px; font-weight: 600; color: #e8c878;
       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
@@ -180,7 +194,7 @@
     <div style="text-align:center;max-width:520px;padding:0 20px;">
       <div style="font-size:28px;color:#e8c878;letter-spacing:0.2em;margin-bottom:12px;">山海</div>
       <div style="font-size:14px;color:#c8b090;margin-bottom:16px;">Mountains, plains &amp; lakes</div>
-      WASD move · Space swim up · Shift sprint · Ctrl dive · RMB orbit · Scroll zoom · Esc edit · ` panel
+      WASD move · Space swim up · Shift sprint · Ctrl dive · RMB orbit · Scroll zoom · Esc edit · ` panel · Click minimap to teleport
     </div>
   </div>
 
@@ -231,6 +245,7 @@
       <canvas id="minimap-bg" width="120" height="120"></canvas>
       <canvas id="minimap-overlay" width="120" height="120"></canvas>
     </div>
+    <button id="minimap-tp-btn" type="button" tabindex="-1">click on anywhere on the map to teleport</button>
   </div>
 
   <div id="hud">
@@ -298,7 +313,7 @@
   const OCEAN_DEPTH = 1.85;
   const SEED = 1337;
   const WORLD_CENTER = WORLD_SIZE * 0.5;
-  const SPAWN = { x: WORLD_CENTER, z: WORLD_CENTER - 50 };
+  const SPAWN = { x: 249, y: 31, z: 187 };
   const ISLAND = { cx: WORLD_CENTER, cz: WORLD_CENTER, radius: 90, rimHeight: 9 };
   const ISLAND_MT_OFFSET = 62;
   const ISLAND_MOUNTAINS = [
@@ -353,15 +368,15 @@
     id: '崑崙',
     cx: WORLD_CENTER - OUTER_DIST,
     cz: WORLD_CENTER,
-    radius: 72,
-    peakSpread: 44,
+    radius: 84,
+    peakSpread: 58,
     peakX: WORLD_CENTER - OUTER_DIST,
     peakZ: WORLD_CENTER,
-    weakWaterInner: 14,
-    weakWaterOuter: 46,
+    weakWaterInner: 18,
+    weakWaterOuter: 54,
     weakWaterLevel: WATER_LEVEL + 1.35,
-    fireRingInner: 48,
-    fireRingOuter: 74,
+    fireRingInner: 56,
+    fireRingOuter: 82,
     craterRadius: 13,
     godX: WORLD_CENTER - OUTER_DIST + 9,
     godZ: WORLD_CENTER + 18,
@@ -523,7 +538,7 @@
     { cx: WORLD_CENTER, cz: WORLD_CENTER - OUTER_DIST, amp: 50, spread: 46 },
     { cx: WORLD_CENTER, cz: WORLD_CENTER + OUTER_DIST, amp: 48, spread: 44 },
     { cx: WORLD_CENTER + OUTER_DIST, cz: WORLD_CENTER, amp: 46, spread: 42 },
-    { cx: WORLD_CENTER - OUTER_DIST, cz: WORLD_CENTER, amp: 48, spread: 44 },
+    { cx: WORLD_CENTER - OUTER_DIST, cz: WORLD_CENTER, amp: 64, spread: 58 },
   ];
 
   const PLATEAUS = [
@@ -554,6 +569,12 @@
   function isInKunlunWeakWaterRing(x, z) {
     const d = Math.hypot(x - KUNLUN.cx, z - KUNLUN.cz);
     return d >= KUNLUN.weakWaterInner && d <= KUNLUN.weakWaterOuter;
+  }
+
+  function isNearBeishan(x, z) {
+    const m = ISLAND_MOUNTAINS.find(mt => mt.id === '北山');
+    if (!m) return false;
+    return Math.hypot(x - m.cx, z - m.cz) < m.spread * 3;
   }
 
   function nanshanFoothillMask(x, z) {
@@ -696,6 +717,14 @@
 
     const d = Math.hypot(x - KUNLUN.cx, z - KUNLUN.cz);
 
+    if (d < KUNLUN.weakWaterInner) {
+      const pdx = (x - KUNLUN.peakX) / KUNLUN.peakSpread;
+      const pdz = (z - KUNLUN.peakZ) / KUNLUN.peakSpread;
+      const d2 = pdx * pdx + pdz * pdz;
+      h += 14 * Math.exp(-d2 * 1.5) * mask;
+      h += 5 * Math.exp(-d2 * 0.45) * (fbm(x * 0.12, z * 0.12, 2) - 0.5) * mask;
+    }
+
     if (d >= KUNLUN.weakWaterInner && d <= KUNLUN.weakWaterOuter) {
       const mid = (KUNLUN.weakWaterInner + KUNLUN.weakWaterOuter) * 0.5;
       const half = (KUNLUN.weakWaterOuter - KUNLUN.weakWaterInner) * 0.5;
@@ -717,7 +746,7 @@
       h -= bowl * 18 * mask;
       if (craterD < KUNLUN.craterRadius * 0.42) {
         const flat = 1 - craterD / (KUNLUN.craterRadius * 0.42);
-        h = lerp(h, 34.5 + fbm(x * 0.25, z * 0.25, 2) * 0.4, flat * flat * mask);
+        h = lerp(h, 40 + fbm(x * 0.25, z * 0.25, 2) * 0.4, flat * flat * mask);
       }
     }
 
@@ -1321,10 +1350,10 @@
       const surfY = gridY + KUNLUN.weakWaterLevel;
 
       const blackWater = new THREE.MeshStandardMaterial({
-        color: 0x020406, transparent: true, opacity: 0.96, roughness: 0.04, metalness: 0.45,
+        color: 0x020406, transparent: true, opacity: 0.72, roughness: 0.04, metalness: 0.45,
       });
       const blackWaterDeep = new THREE.MeshStandardMaterial({
-        color: 0x000204, transparent: true, opacity: 0.88, roughness: 0.02, metalness: 0.55, depthWrite: false,
+        color: 0x000204, transparent: true, opacity: 0.58, roughness: 0.02, metalness: 0.55, depthWrite: false,
       });
       const waterSurface = new THREE.Mesh(
         new THREE.RingGeometry(KUNLUN.weakWaterInner, KUNLUN.weakWaterOuter, 72),
@@ -2378,41 +2407,128 @@
     ctx: null,
     master: null,
     ambGain: null,
+    musicGain: null,
+    sfxGain: null,
+    waterGain: null,
     _lastStep: 0,
     _birdT: 0,
+    _chimeT: 0,
+    _gustT: 0,
+    _swimT: 0,
+    _prevOnGround: true,
+    _prevY: 0,
+    _wasInWater: false,
+    _musicStarted: false,
+    _droneFilter: null,
+    _droneGain: null,
+    _droneOscs: [],
     _inited: false,
+    _pent: [196, 220, 246.94, 293.66, 329.63, 392, 440, 523.25],
 
     init() {
       if (this._inited) return;
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = 0.38;
-      this.master.connect(this.ctx.destination);
-      this.ambGain = this.ctx.createGain();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.ctx = ctx;
+      this.master = ctx.createGain();
+      this.master.gain.value = 0.42;
+      this.master.connect(ctx.destination);
+
+      this.ambGain = ctx.createGain();
       this.ambGain.gain.value = 0;
+      this.musicGain = ctx.createGain();
+      this.musicGain.gain.value = 0;
+      this.sfxGain = ctx.createGain();
+      this.sfxGain.gain.value = 0.9;
+      this.waterGain = ctx.createGain();
+      this.waterGain.gain.value = 0;
       this.ambGain.connect(this.master);
-      const len = this.ctx.sampleRate * 2;
-      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      this.musicGain.connect(this.master);
+      this.sfxGain.connect(this.master);
+      this.waterGain.connect(this.master);
+
+      const len = ctx.sampleRate * 3;
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      const amb = this.ctx.createBufferSource();
-      amb.buffer = buf;
-      amb.loop = true;
-      const filt = this.ctx.createBiquadFilter();
-      filt.type = 'lowpass';
-      filt.frequency.value = 420;
-      amb.connect(filt);
-      filt.connect(this.ambGain);
-      amb.start();
+      let pink = 0;
+      for (let i = 0; i < len; i++) {
+        const white = Math.random() * 2 - 1;
+        pink = pink * 0.98 + white * 0.02;
+        d[i] = pink;
+      }
+      const wind = ctx.createBufferSource();
+      wind.buffer = buf;
+      wind.loop = true;
+      const windFilt = ctx.createBiquadFilter();
+      windFilt.type = 'bandpass';
+      windFilt.frequency.value = 280;
+      windFilt.Q.value = 0.45;
+      wind.connect(windFilt);
+      windFilt.connect(this.ambGain);
+      wind.start();
+
+      const waterLen = ctx.sampleRate * 2;
+      const wbuf = ctx.createBuffer(1, waterLen, ctx.sampleRate);
+      const wd = wbuf.getChannelData(0);
+      for (let i = 0; i < waterLen; i++) wd[i] = (Math.random() * 2 - 1) * 0.6;
+      const water = ctx.createBufferSource();
+      water.buffer = wbuf;
+      water.loop = true;
+      const waterFilt = ctx.createBiquadFilter();
+      waterFilt.type = 'lowpass';
+      waterFilt.frequency.value = 520;
+      water.connect(waterFilt);
+      waterFilt.connect(this.waterGain);
+      water.start();
+
       this._inited = true;
+    },
+
+    _startMusic() {
+      if (this._musicStarted || !this.ctx) return;
+      this._musicStarted = true;
+      const ctx = this.ctx;
+      const t0 = ctx.currentTime;
+      this._droneFilter = ctx.createBiquadFilter();
+      this._droneFilter.type = 'lowpass';
+      this._droneFilter.frequency.value = 720;
+      this._droneFilter.Q.value = 0.7;
+      this._droneGain = ctx.createGain();
+      this._droneGain.gain.value = 0;
+      this._droneGain.connect(this._droneFilter);
+      this._droneFilter.connect(this.musicGain);
+
+      const freqs = [130.81, 146.83, 196, 261.63, 329.63];
+      for (const f of freqs) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        const g = ctx.createGain();
+        g.gain.value = 0.11 / freqs.length;
+        osc.connect(g);
+        g.connect(this._droneGain);
+        osc.start(t0);
+        this._droneOscs.push({ osc, g, base: f });
+      }
+
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.04;
+      const lfoG = ctx.createGain();
+      lfoG.gain.value = 220;
+      lfo.connect(lfoG);
+      lfoG.connect(this._droneFilter.frequency);
+      lfo.start(t0);
+
+      this.musicGain.gain.setTargetAtTime(0.55, t0, 1.8);
+      this._chimeT = 4 + Math.random() * 4;
     },
 
     resume() {
       this.init();
       if (this.ctx?.state === 'suspended') this.ctx.resume();
+      this._startMusic();
     },
 
-    _tone(freq, dur, type = 'sine', vol = 0.08, ramp = 0.02) {
+    _tone(freq, dur, type = 'sine', vol = 0.08, ramp = 0.02, dest = null) {
       if (!this.ctx) return;
       const t0 = this.ctx.currentTime;
       const osc = this.ctx.createOscillator();
@@ -2423,12 +2539,12 @@
       g.gain.linearRampToValueAtTime(vol, t0 + ramp);
       g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
       osc.connect(g);
-      g.connect(this.master);
+      g.connect(dest || this.sfxGain);
       osc.start(t0);
       osc.stop(t0 + dur + 0.05);
     },
 
-    _noise(dur, vol = 0.04, freq = 800) {
+    _noise(dur, vol = 0.04, freq = 800, type = 'lowpass') {
       if (!this.ctx) return;
       const t0 = this.ctx.currentTime;
       const len = Math.ceil(this.ctx.sampleRate * dur);
@@ -2438,61 +2554,190 @@
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       const filt = this.ctx.createBiquadFilter();
-      filt.type = 'lowpass';
+      filt.type = type;
       filt.frequency.value = freq;
       const g = this.ctx.createGain();
       g.gain.setValueAtTime(vol, t0);
       g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
       src.connect(filt);
       filt.connect(g);
-      g.connect(this.master);
+      g.connect(this.sfxGain);
       src.start(t0);
       src.stop(t0 + dur);
     },
 
-    playFootstep() {
-      this._noise(0.06, 0.05, 400);
-      this._tone(120 + Math.random() * 40, 0.05, 'triangle', 0.03);
+    _pluck(freq, vol = 0.07) {
+      if (!this.ctx) return;
+      const t0 = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t0);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.92, t0 + 1.6);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 2.4);
+      osc.connect(g);
+      g.connect(this.musicGain);
+      osc.start(t0);
+      osc.stop(t0 + 2.5);
+    },
+
+    playStoneFootstep() {
+      const mat = Math.random();
+      this._noise(0.05, 0.035 + mat * 0.02, 320 + mat * 180, 'bandpass');
+      this._tone(90 + Math.random() * 55, 0.06, 'triangle', 0.028);
+    },
+
+    playSoftFootstep() {
+      this._noise(0.04, 0.018, 180, 'lowpass');
     },
 
     playSplash() {
-      this._noise(0.35, 0.12, 1200);
-      this._tone(180, 0.25, 'sine', 0.06);
+      this._noise(0.45, 0.14, 1400);
+      this._noise(0.25, 0.08, 400, 'bandpass');
+      this._tone(140 + Math.random() * 40, 0.35, 'sine', 0.07);
+      this._tone(280, 0.2, 'sine', 0.04);
+    },
+
+    playStoneLand(impact = 0.5) {
+      const v = clamp(impact, 0.2, 1);
+      this._noise(0.12, 0.05 * v, 260, 'bandpass');
+      this._tone(70 + v * 30, 0.14, 'triangle', 0.05 * v);
+    },
+
+    playTeleport() {
+      if (!this.ctx) return;
+      const t0 = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(520, t0);
+      osc.frequency.exponentialRampToValueAtTime(196, t0 + 0.55);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(0.09, t0 + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.7);
+      osc.connect(g);
+      g.connect(this.sfxGain);
+      osc.start(t0);
+      osc.stop(t0 + 0.75);
+      this._noise(0.35, 0.06, 900);
+      setTimeout(() => this._pluck(this._pent[Math.floor(Math.random() * this._pent.length)], 0.05), 120);
     },
 
     playBird() {
-      this._tone(880, 0.12, 'sine', 0.05);
-      setTimeout(() => this._tone(1240, 0.15, 'sine', 0.04), 90);
+      const base = 740 + Math.random() * 280;
+      this._tone(base, 0.1, 'sine', 0.045);
+      setTimeout(() => this._tone(base * 1.35, 0.14, 'sine', 0.038), 70 + Math.random() * 40);
+      if (Math.random() > 0.5) {
+        setTimeout(() => this._tone(base * 1.12, 0.1, 'sine', 0.03), 180);
+      }
+    },
+
+    playCricket() {
+      this._tone(4200 + Math.random() * 800, 0.04, 'sine', 0.012);
+      setTimeout(() => this._tone(4600 + Math.random() * 600, 0.03, 'sine', 0.01), 55);
     },
 
     playWind(vol) {
       if (!this.ctx || !this.ambGain) return;
-      this.ambGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.4);
+      this.ambGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.5);
+    },
+
+    playWaterAmb(vol) {
+      if (!this.ctx || !this.waterGain) return;
+      this.waterGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.35);
+    },
+
+    _setMusicMood(region) {
+      if (!this.ctx || !this._droneGain) return;
+      const t = this.ctx.currentTime;
+      let bright = 0.55;
+      let low = 1;
+      if (region === NANSHAN.id) { bright = 0.72; low = 0.95; }
+      else if (region === KUNLUN.id) { bright = 0.38; low = 1.15; }
+      else if (region === '扶桑') { bright = 0.65; low = 0.9; }
+      else if (region === '北山') { bright = 0.62; low = 1; }
+      else if (region === '海外東' || region === '海外北') { bright = 0.48; low = 1.05; }
+      this._droneGain.gain.setTargetAtTime(0.1 * bright, t, 1.2);
+      if (this._droneFilter) {
+        this._droneFilter.frequency.setTargetAtTime(620 * bright, t, 1.5);
+      }
+      for (const d of this._droneOscs) {
+        d.osc.frequency.setTargetAtTime(d.base * low, t, 2.5);
+      }
     },
 
     update(dt, player, region) {
       if (!this._inited) return;
-      let amb = 0.02;
-      if (region === NANSHAN.id) amb = 0.05;
-      if (region === '扶桑') amb = 0.07;
-      if (region === '海外東' || region === '海外北') amb = 0.06;
-      if (player.inWater) amb += 0.04;
+      this._startMusic();
+
+      let amb = 0.028;
+      if (region === NANSHAN.id) amb = 0.055;
+      if (region === KUNLUN.id) amb = 0.04;
+      if (region === '扶桑') amb = 0.065;
+      if (region === '海外東' || region === '海外北') amb = 0.058;
+      if (player.inWater) amb += 0.035;
       this.playWind(amb);
+      this.playWaterAmb(player.inWater ? (player.swimming ? 0.1 : 0.06) : 0);
+      this._setMusicMood(region);
 
       this._birdT -= dt;
-      if (region === '北山' && this._birdT <= 0) {
+      if ((region === '北山' || region === NANSHAN.id) && this._birdT <= 0) {
         this.playBird();
-        this._birdT = 5 + Math.random() * 8;
+        this._birdT = 6 + Math.random() * 10;
+      }
+      if (region === NANSHAN.id) {
+        this._gustT -= dt;
+        if (this._gustT <= 0 && Math.random() > 0.55) {
+          this.playCricket();
+          this._gustT = 2.5 + Math.random() * 4;
+        }
       }
 
-      if (player.onGround && !player.inWater && (Math.abs(player.vel.x) > 1 || Math.abs(player.vel.z) > 1)) {
+      const nearStone = isNearBeishan(player.pos.x, player.pos.z);
+
+      this._chimeT -= dt;
+      if (nearStone && this._chimeT <= 0) {
+        const note = this._pent[Math.floor(Math.random() * this._pent.length)];
+        this._pluck(note, 0.065);
+        this._chimeT = 7 + Math.random() * 7;
+      } else if (!nearStone) {
+        this._chimeT = Math.min(this._chimeT, 3);
+      }
+
+      if (player.inWater && !this._wasInWater) this.playSplash();
+      this._wasInWater = player.inWater;
+
+      const fallDist = this._prevY - player.pos.y;
+      if (nearStone && !this._prevOnGround && player.onGround && player.vel.y <= 0.5 && fallDist > 3) {
+        this.playStoneLand(clamp(fallDist / 18, 0.25, 1));
+      }
+      this._prevOnGround = player.onGround;
+      this._prevY = player.pos.y;
+
+      if (player.swimming && (Math.abs(player.vel.x) > 0.5 || Math.abs(player.vel.z) > 0.5)) {
+        this._swimT += dt;
+        if (this._swimT > 0.55) {
+          this._noise(0.18, 0.045, 700, 'bandpass');
+          this._tone(110 + Math.random() * 30, 0.12, 'sine', 0.025);
+          this._swimT = 0;
+        }
+      } else {
+        this._swimT = 0.55;
+      }
+
+      const moveSpd = Math.hypot(player.vel.x, player.vel.z);
+      const stepGap = moveSpd > 10 ? 0.28 : 0.38;
+      if (player.onGround && !player.inWater && moveSpd > 1) {
         this._lastStep += dt;
-        if (this._lastStep > 0.38) {
-          this.playFootstep();
+        if (this._lastStep > stepGap) {
+          if (nearStone) this.playStoneFootstep();
+          else this.playSoftFootstep();
           this._lastStep = 0;
         }
       } else {
-        this._lastStep = 0.38;
+        this._lastStep = stepGap;
       }
     },
   };
@@ -3549,7 +3794,7 @@
     _kunlunLoreDismissed: false,
 
     player: {
-      pos: new THREE.Vector3(SPAWN.x, 8, SPAWN.z),
+      pos: new THREE.Vector3(SPAWN.x, SPAWN.y ?? 8, SPAWN.z),
       vel: new THREE.Vector3(),
       radius: 0.38,
       height: 1.65,
@@ -3629,6 +3874,11 @@
       this._bindInput(host);
       this._rebuildColliders();
       this._bindUI();
+      const mm = document.getElementById('minimap-wrap');
+      if (mm) {
+        mm.setAttribute('title', 'Click to teleport');
+        mm.classList.add('tp-active');
+      }
 
       window.addEventListener('resize', () => this._onResize(host));
       this._animate();
@@ -3697,7 +3947,7 @@
 
     _updateMinimap() {
       this._mmTick = (this._mmTick ?? 0) + 1;
-      if (this._mmTick % 3 !== 0) return;
+      if (this._mmTick % 3 !== 0 && !this._mmTpFlash) return;
       const canvas = document.getElementById('minimap-overlay');
       if (!canvas) return;
       const res = this._minimapRes;
@@ -3731,6 +3981,19 @@
       ctx.arc(px, py, 3, 0, Math.PI * 2);
       ctx.fill();
 
+      if (this._mmTpFlash) {
+        const a = this._mmTpFlash.t / 0.55;
+        if (a > 0) {
+          const tx = this._mmTpFlash.x;
+          const ty = this._mmTpFlash.z;
+          ctx.strokeStyle = `rgba(255, 232, 160, ${0.35 + a * 0.65})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 6 + (1 - a) * 10, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
       const fx = (FUSANG.cx / ws) * res;
       const fy = (FUSANG.cz / ws) * res;
       if (Math.hypot(px - fx, py - fy) < 18) {
@@ -3754,6 +4017,45 @@
 
     _getGroundHeightAt(x, z) {
       return this.config.gridY + TerrainGen.sample(x, z);
+    },
+
+    _minimapEventToWorld(ev) {
+      const wrap = document.getElementById('minimap-wrap');
+      if (!wrap) return null;
+      const rect = wrap.getBoundingClientRect();
+      const u = (ev.clientX - rect.left) / rect.width;
+      const v = (ev.clientY - rect.top) / rect.height;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+      const ws = TerrainGen.size;
+      return { x: u * ws, z: v * ws };
+    },
+
+    _teleportTo(x, z) {
+      const p = this.player;
+      const r = p.radius;
+      const sz = this.config.worldSize;
+      x = THREE.MathUtils.clamp(x, r, sz - r);
+      z = THREE.MathUtils.clamp(z, r, sz - r);
+
+      const groundY = this._getGroundHeightAt(x, z);
+      const surface = this.config.gridY + WATER_LEVEL;
+      const terrainH = TerrainGen.sample(x, z);
+      let dropY = groundY + 24 + Math.min(terrainH * 0.2, 14);
+      if (groundY < surface - 0.35) dropY = Math.max(dropY, surface + 16);
+      dropY = Math.min(dropY, this.config.gridY + 92);
+
+      p.pos.set(x, dropY, z);
+      p.vel.set(0, 0, 0);
+      p.onGround = false;
+      p.inWater = false;
+      p.swimming = false;
+      if (p.mesh) p.mesh.position.copy(p.pos);
+
+      if (this.mode !== 'play') this.enterPlay();
+      else this._snapPlayCamera();
+      this._checkRegionChange();
+      this._mmTpFlash = { x: (x / sz) * this._minimapRes, z: (z / sz) * this._minimapRes, t: 0.55 };
+      Soundscape.playTeleport();
     },
 
     _getWaterState(x, z, playerY) {
@@ -3946,6 +4248,7 @@
       this.player.vel.set(0, 0, 0);
       this._snapPlayCamera();
       document.getElementById('hud-mode').textContent = 'play';
+      document.getElementById('minimap-wrap')?.classList.add('tp-active');
       this._currentRegion = null;
       this._checkRegionChange();
     },
@@ -3957,6 +4260,7 @@
       if (this._gridGroup) this._gridGroup.visible = true;
       this._rmbDown = false;
       document.getElementById('hud-mode').textContent = 'edit';
+      document.getElementById('minimap-wrap')?.classList.remove('tp-active');
     },
 
     _snapPlayCamera() {
@@ -4044,8 +4348,8 @@
     },
 
     _placePlayerAtSpawn() {
-      const gy = this._getGroundHeightAt(SPAWN.x, SPAWN.z);
-      this.player.pos.set(SPAWN.x, gy + 0.05, SPAWN.z);
+      const gy = SPAWN.y ?? this._getGroundHeightAt(SPAWN.x, SPAWN.z) + 0.05;
+      this.player.pos.set(SPAWN.x, gy, SPAWN.z);
       this.player.mesh.position.copy(this.player.pos);
     },
 
@@ -4116,6 +4420,12 @@
       document.getElementById('btn-play').onclick = () => this.enterPlay();
       document.getElementById('btn-edit').onclick = () => this.enterEdit();
       document.getElementById('overlay').onclick = () => this.enterPlay();
+      document.getElementById('minimap-wrap')?.addEventListener('click', e => {
+        const pt = this._minimapEventToWorld(e);
+        if (!pt) return;
+        e.stopPropagation();
+        this._teleportTo(pt.x, pt.z);
+      });
       document.getElementById('nanshan-lore-close').onclick = () => {
         this._nanshanLoreDismissed = true;
         this._hideNanshanLore();
@@ -4533,6 +4843,10 @@
       requestAnimationFrame(() => this._animate());
       const dt = Math.min(this._clock.getDelta(), 0.05);
       this._updateFps(dt);
+      if (this._mmTpFlash) {
+        this._mmTpFlash.t -= dt;
+        if (this._mmTpFlash.t <= 0) this._mmTpFlash = null;
+      }
       if (this.mode === 'play') {
         this._movePlayer(dt);
         this._updatePlayCamera(dt);
@@ -4556,9 +4870,7 @@
           XiwangmuNPC.update(this._xiwangmu, dt);
         }
         const region = this._getRegion(this.player.pos.x, this.player.pos.z);
-        if (region === NANSHAN.id || region === KUNLUN.id || region === '扶桑' || region === '北山' || this.player.inWater) {
-          Soundscape.update(dt, this.player, region);
-        }
+        Soundscape.update(dt, this.player, region);
       } else {
         this._controls.update();
       }

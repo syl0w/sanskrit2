@@ -372,12 +372,11 @@
     peakSpread: 58,
     peakX: WORLD_CENTER - OUTER_DIST,
     peakZ: WORLD_CENTER,
-    weakWaterInner: 18,
-    weakWaterOuter: 54,
+    weakWaterInner: 38,
+    weakWaterOuter: 52,
     weakWaterLevel: WATER_LEVEL + 1.35,
-    fireRingInner: 56,
-    fireRingOuter: 82,
-    craterRadius: 13,
+    fireRingInner: 54,
+    fireRingOuter: 80,
     godX: WORLD_CENTER - OUTER_DIST + 9,
     godZ: WORLD_CENTER + 18,
     xiwangmuX: WORLD_CENTER - OUTER_DIST,
@@ -718,11 +717,10 @@
     const d = Math.hypot(x - KUNLUN.cx, z - KUNLUN.cz);
 
     if (d < KUNLUN.weakWaterInner) {
-      const pdx = (x - KUNLUN.peakX) / KUNLUN.peakSpread;
-      const pdz = (z - KUNLUN.peakZ) / KUNLUN.peakSpread;
-      const d2 = pdx * pdx + pdz * pdz;
-      h += 14 * Math.exp(-d2 * 1.5) * mask;
-      h += 5 * Math.exp(-d2 * 0.45) * (fbm(x * 0.12, z * 0.12, 2) - 0.5) * mask;
+      const radial = 1 - smoothstep(KUNLUN.weakWaterInner * 0.5, KUNLUN.weakWaterInner, d);
+      const rock = fbm(x * 0.24, z * 0.24, 3) - 0.5;
+      h += rock * 3.5 * radial * mask;
+      h += Math.abs(fbm(x * 0.48, z * 0.48, 2) - 0.5) * 2.2 * radial * mask;
     }
 
     if (d >= KUNLUN.weakWaterInner && d <= KUNLUN.weakWaterOuter) {
@@ -731,23 +729,8 @@
       const ringT = 1 - Math.abs(d - mid) / half;
       const trench = smoothstep(0, 1, ringT);
       const target = KUNLUN.weakWaterLevel - 2.15 - trench * 0.45;
-      const cut = Math.min(0.98, trench * 0.97 * mask + 0.2 * mask);
+      const cut = Math.min(0.98, trench * 0.97 * mask + 0.25 * mask);
       h = lerp(h, target, cut);
-    }
-
-    if (d > KUNLUN.weakWaterOuter && d < KUNLUN.fireRingInner) {
-      const shelf = 1 - smoothstep(KUNLUN.weakWaterOuter, KUNLUN.fireRingInner, d);
-      h = lerp(h, KUNLUN.weakWaterLevel + 0.6 + fbm(x * 0.14, z * 0.14, 2) * 0.35, shelf * 0.55 * mask);
-    }
-
-    const craterD = Math.hypot(x - KUNLUN.peakX, z - KUNLUN.peakZ);
-    if (craterD < KUNLUN.craterRadius) {
-      const bowl = Math.pow(1 - craterD / KUNLUN.craterRadius, 1.35);
-      h -= bowl * 18 * mask;
-      if (craterD < KUNLUN.craterRadius * 0.42) {
-        const flat = 1 - craterD / (KUNLUN.craterRadius * 0.42);
-        h = lerp(h, 40 + fbm(x * 0.25, z * 0.25, 2) * 0.4, flat * flat * mask);
-      }
     }
 
     if (d >= KUNLUN.fireRingInner && d <= KUNLUN.fireRingOuter) {
@@ -759,16 +742,6 @@
       if (d > KUNLUN.fireRingInner + 3 && d < KUNLUN.fireRingOuter - 4) {
         h += fbm(x * 0.12, z * 0.12, 2) * 4.5 * mask;
       }
-    }
-
-    const westShore = smoothstep(KUNLUN.cx + 25, KUNLUN.cx - 30, x);
-    if (westShore > 0.1 && d < KUNLUN.radius * 0.95) {
-      h = lerp(h, WATER_LEVEL + 0.5 + fbm(x * 0.12, z * 0.12, 2) * 0.4, westShore * 0.55 * mask);
-    }
-
-    const eastShore = smoothstep(KUNLUN.cx - 20, KUNLUN.cx + 55, x);
-    if (eastShore > 0.1 && d < KUNLUN.radius * 0.85) {
-      h = lerp(h, WATER_LEVEL + 0.8 + fbm(x * 0.1, z * 0.1, 2) * 0.35, eastShore * 0.35 * mask);
     }
 
     return h;
@@ -1042,26 +1015,28 @@
         const km = kunlunMask(lx, lz);
         if (!uw && km > 0.12) {
           const kd = Math.hypot(lx - KUNLUN.cx, lz - KUNLUN.cz);
-          const craterD = Math.hypot(lx - KUNLUN.peakX, lz - KUNLUN.peakZ);
-          const inMoat = kd >= KUNLUN.weakWaterInner && kd <= KUNLUN.weakWaterOuter;
-          const moatFloor = inMoat && h < KUNLUN.weakWaterLevel + 0.9;
-          if (moatFloor) {
-            c = new THREE.Color(0x040608).lerp(new THREE.Color(0x0c1018), km);
+          if (kd >= KUNLUN.weakWaterInner && kd <= KUNLUN.weakWaterOuter) {
+            if (h < KUNLUN.weakWaterLevel + 0.9) {
+              c = new THREE.Color(0x040608).lerp(new THREE.Color(0x0c1018), km);
+            } else {
+              c = new THREE.Color(0x14181c).lerp(new THREE.Color(0x0a0c10), km);
+            }
           } else if (kd >= KUNLUN.fireRingInner && kd <= KUNLUN.fireRingOuter) {
             const n = fbm(lx * 0.07, lz * 0.07, 2);
             c = new THREE.Color(0x3a0808).lerp(new THREE.Color(0x581010), n);
             c.lerp(new THREE.Color(0x280404), (1 - n) * 0.45);
           } else if (kd > KUNLUN.weakWaterOuter && kd < KUNLUN.fireRingInner) {
             const n = fbm(lx * 0.09, lz * 0.09, 2);
-            c = new THREE.Color(0x9aa0a8).lerp(new THREE.Color(0x681818), n * 0.55);
+            c = new THREE.Color(0x1a1414).lerp(new THREE.Color(0x401010), n * 0.7);
           } else {
             c = this.vertexColor(h, slope, false);
-            if (h > 14) {
-              c.lerp(new THREE.Color(0xe8ecef), clamp((h - 14) / 12, 0, 1) * 0.45);
+            const rockVar = fbm(lx * 0.3, lz * 0.3, 3);
+            c.lerp(new THREE.Color(0x8a8e94), 0.38);
+            c.lerp(new THREE.Color(0x62666c), (rockVar - 0.5) * 0.28);
+            if (h > 16) {
+              c.lerp(new THREE.Color(0xd8dce4), clamp((h - 16) / 14, 0, 1) * 0.52);
             }
-            if (craterD < KUNLUN.craterRadius + 2 && h > 28) {
-              c.lerp(new THREE.Color(0xd0d4dc), 0.22);
-            }
+            if (slope > 0.38) c.lerp(new THREE.Color(0x4e5258), (slope - 0.38) * 0.55);
           }
         }
         colors[i * 3] = c.r;
@@ -1404,15 +1379,6 @@
       fireGround.renderOrder = 2;
       klGroup.add(fireGround);
 
-      const foothillMat = new THREE.MeshStandardMaterial({ color: 0x8a9098, roughness: 0.94, metalness: 0.02 });
-      const foothillFloor = new THREE.Mesh(
-        new THREE.RingGeometry(KUNLUN.weakWaterOuter, KUNLUN.fireRingInner, 56),
-        foothillMat,
-      );
-      foothillFloor.rotation.x = -Math.PI / 2;
-      foothillFloor.position.set(cx, sampleY(cx + (KUNLUN.weakWaterOuter + KUNLUN.fireRingInner) * 0.5, cz) + 0.08, cz);
-      klGroup.add(foothillFloor);
-
       const basalt = new THREE.MeshStandardMaterial({ color: 0x581010, roughness: 0.94, metalness: 0.02 });
       const basaltDark = new THREE.MeshStandardMaterial({ color: 0x3a0808, roughness: 0.96, metalness: 0.02 });
       const lavaCrust = new THREE.MeshStandardMaterial({
@@ -1565,90 +1531,32 @@
       }
 
       const peakY = sampleY(KUNLUN.peakX, KUNLUN.peakZ);
-      const chamberY = sampleY(KUNLUN.xiwangmuX, KUNLUN.xiwangmuZ);
-      const chamberDepth = Math.max(8, peakY - chamberY);
       const rockMat = new THREE.MeshStandardMaterial({ color: 0x8a9088, roughness: 0.9, metalness: 0.03 });
       const rockDark = new THREE.MeshStandardMaterial({ color: 0x727870, roughness: 0.92 });
-      const jadeGlow = new THREE.MeshStandardMaterial({
-        color: 0x88c8a8, emissive: 0x48a878, emissiveIntensity: 0.55, roughness: 0.3,
-      });
+      const rockSnow = new THREE.MeshStandardMaterial({ color: 0xd8dce4, roughness: 0.82 });
 
-      const crater = new THREE.Group();
-      crater.position.set(KUNLUN.peakX, peakY - 1, KUNLUN.peakZ);
-
-      for (let i = 0; i < 16; i++) {
-        const ang = (i / 16) * Math.PI * 2;
-        const rimR = 10.5 + (i % 3) * 0.5;
-        const rock = new THREE.Mesh(
-          new THREE.DodecahedronGeometry(1.5 + (i % 3) * 0.4, 0),
-          i % 2 ? rockMat : rockDark,
-        );
-        rock.position.set(Math.cos(ang) * rimR, 1.8 + (i % 2) * 0.8, Math.sin(ang) * rimR);
-        rock.rotation.set(hash2(i, 1) * 0.8, ang, hash2(i, 2) * 0.5);
-        rock.castShadow = true;
-        crater.add(rock);
-      }
-
-      const pitWall = new THREE.Mesh(
-        new THREE.CylinderGeometry(10, 6.5, chamberDepth, 24, 1, true),
-        new THREE.MeshStandardMaterial({ color: 0x686c70, roughness: 0.92, side: THREE.DoubleSide }),
-      );
-      pitWall.position.y = -chamberDepth * 0.5;
-      crater.add(pitWall);
-
-      const pitFloor = new THREE.Mesh(
-        new THREE.CylinderGeometry(6.5, 6.5, 0.35, 24),
-        new THREE.MeshStandardMaterial({ color: 0x6a7078, roughness: 0.88, metalness: 0.04 }),
-      );
-      pitFloor.position.y = -chamberDepth + 0.18;
-      crater.add(pitFloor);
-
-      const courtFloor = new THREE.Mesh(
-        new THREE.CylinderGeometry(5.2, 5.5, 0.12, 20),
-        new THREE.MeshStandardMaterial({
-          color: 0x88b8a0, emissive: 0x489870, emissiveIntensity: 0.22, roughness: 0.55,
-        }),
-      );
-      courtFloor.position.y = -chamberDepth + 0.42;
-      crater.add(courtFloor);
-
-      for (let i = 0; i < 6; i++) {
-        const ang = (i / 6) * Math.PI * 2;
-        const vein = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.5, 0.15), jadeGlow);
-        vein.position.set(Math.cos(ang) * 4.5, -chamberDepth * 0.55, Math.sin(ang) * 4.5);
-        vein.rotation.z = 0.2;
-        crater.add(vein);
-      }
-
-      const chamberLight = new THREE.Mesh(
-        new THREE.CylinderGeometry(5, 5.5, 0.08, 20),
-        new THREE.MeshStandardMaterial({
-          color: 0x608878, emissive: 0x408860, emissiveIntensity: 0.4, transparent: true, opacity: 0.6,
-        }),
-      );
-      chamberLight.position.y = -chamberDepth + 0.4;
-      crater.add(chamberLight);
-
-      klGroup.add(crater);
-
-      const sandMat = new THREE.MeshStandardMaterial({ color: 0xd8c0a8, roughness: 0.96 });
       for (let i = 0; i < 10; i++) {
-        const sx = cx - 16 - i * 4 + hash2(i, 901) * 12;
-        const sz = cz + (hash2(i, 902) - 0.5) * 52;
+        const ang = (i / 10) * Math.PI * 2 + hash2(i, 960) * 0.4;
+        const sr = 4 + hash2(i, 961) * 5;
+        const sx = KUNLUN.peakX + Math.cos(ang) * sr;
+        const sz = KUNLUN.peakZ + Math.sin(ang) * sr;
         const sy = sampleY(sx, sz);
-        const dune = new THREE.Mesh(new THREE.SphereGeometry(4 + hash2(i, 903) * 3, 8, 6), sandMat);
-        dune.scale.y = 0.32;
-        dune.position.set(sx, sy + 0.5, sz);
-        klGroup.add(dune);
+        const rock = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(1.2 + hash2(i, 962) * 1.1, 0),
+          i % 3 === 0 ? rockSnow : (i % 2 ? rockMat : rockDark),
+        );
+        rock.position.set(sx, sy + 0.4, sz);
+        rock.rotation.set(hash2(i, 963) * 0.7, ang, hash2(i, 964) * 0.5);
+        rock.castShadow = true;
+        klGroup.add(rock);
       }
 
       const snowMat = new THREE.MeshStandardMaterial({ color: 0xf0f4f8, roughness: 0.78 });
       for (let i = 0; i < 14; i++) {
         const ang = (i / 14) * Math.PI * 2 + hash2(i, 950) * 0.5;
-        const sr = 8 + hash2(i, 951) * 10;
+        const sr = 10 + hash2(i, 951) * 12;
         const sx = KUNLUN.peakX + Math.cos(ang) * sr;
         const sz = KUNLUN.peakZ + Math.sin(ang) * sr;
-        if (Math.hypot(sx - KUNLUN.peakX, sz - KUNLUN.peakZ) < KUNLUN.craterRadius + 3) continue;
         if (Math.hypot(sx - KUNLUN.cx, sz - KUNLUN.cz) > KUNLUN.weakWaterInner - 2) continue;
         const sy = sampleY(sx, sz);
         if (sy < gridY + 22) continue;

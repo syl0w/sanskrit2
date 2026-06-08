@@ -369,7 +369,7 @@
     cx: WORLD_CENTER - OUTER_DIST,
     cz: WORLD_CENTER,
     radius: 84,
-    peakSpread: 58,
+    peakSpread: 44,
     peakX: WORLD_CENTER - OUTER_DIST,
     peakZ: WORLD_CENTER,
     weakWaterInner: 38,
@@ -537,7 +537,7 @@
     { cx: WORLD_CENTER, cz: WORLD_CENTER - OUTER_DIST, amp: 50, spread: 46 },
     { cx: WORLD_CENTER, cz: WORLD_CENTER + OUTER_DIST, amp: 48, spread: 44 },
     { cx: WORLD_CENTER + OUTER_DIST, cz: WORLD_CENTER, amp: 46, spread: 42 },
-    { cx: WORLD_CENTER - OUTER_DIST, cz: WORLD_CENTER, amp: 64, spread: 58 },
+    { cx: WORLD_CENTER - OUTER_DIST, cz: WORLD_CENTER, amp: 50, spread: 44 },
   ];
 
   const PLATEAUS = [
@@ -717,10 +717,10 @@
     const d = Math.hypot(x - KUNLUN.cx, z - KUNLUN.cz);
 
     if (d < KUNLUN.weakWaterInner) {
-      const radial = 1 - smoothstep(KUNLUN.weakWaterInner * 0.5, KUNLUN.weakWaterInner, d);
+      const radial = 1 - smoothstep(KUNLUN.weakWaterInner * 0.55, KUNLUN.weakWaterInner, d);
       const rock = fbm(x * 0.24, z * 0.24, 3) - 0.5;
-      h += rock * 3.5 * radial * mask;
-      h += Math.abs(fbm(x * 0.48, z * 0.48, 2) - 0.5) * 2.2 * radial * mask;
+      h += rock * 1.8 * radial * mask;
+      h += Math.abs(fbm(x * 0.48, z * 0.48, 2) - 0.5) * 0.9 * radial * mask;
     }
 
     if (d >= KUNLUN.weakWaterInner && d <= KUNLUN.weakWaterOuter) {
@@ -846,8 +846,12 @@
       const dx = (x - peak.cx) / peak.spread;
       const dz = (z - peak.cz) / peak.spread;
       const d2 = dx * dx + dz * dz;
-      h += peak.amp * Math.exp(-d2 * 2.2);
-      h += peak.amp * 0.35 * Math.exp(-d2 * 0.55) * (fbm(x * 0.15, z * 0.15, 3) - 0.5);
+      const isKunlun = peak.cx === KUNLUN.peakX && peak.cz === KUNLUN.peakZ;
+      const coreFall = isKunlun ? 2.9 : 2.2;
+      const shoulderFall = isKunlun ? 0.72 : 0.55;
+      const shoulderAmp = isKunlun ? 0.18 : 0.35;
+      h += peak.amp * Math.exp(-d2 * coreFall);
+      h += peak.amp * shoulderAmp * Math.exp(-d2 * shoulderFall) * (fbm(x * 0.15, z * 0.15, 3) - 0.5);
     }
 
     const ridge = Math.abs(fbm(x * 0.05, z * 0.05, 4) - 0.5) * 2;
@@ -1033,10 +1037,20 @@
             const rockVar = fbm(lx * 0.3, lz * 0.3, 3);
             c.lerp(new THREE.Color(0x8a8e94), 0.38);
             c.lerp(new THREE.Color(0x62666c), (rockVar - 0.5) * 0.28);
-            if (h > 16) {
-              c.lerp(new THREE.Color(0xd8dce4), clamp((h - 16) / 14, 0, 1) * 0.52);
+            const pkd = Math.hypot(lx - KUNLUN.peakX, lz - KUNLUN.peakZ);
+            const peakSnow = 1 - smoothstep(3, KUNLUN.peakSpread * 0.3, pkd);
+            const elevSnow = clamp((h - 11) / 8, 0, 1);
+            const snowT = peakSnow * elevSnow;
+            if (snowT > 0.03) {
+              const snowN = fbm(lx * 0.18, lz * 0.18, 2);
+              const snowCol = new THREE.Color(0xe8ecf2).lerp(new THREE.Color(0xf8fafc), snowN);
+              c.lerp(snowCol, snowT * 0.82);
+              if (snowT > 0.45) c.lerp(new THREE.Color(0xfcfdff), (snowT - 0.45) * 1.1);
             }
-            if (slope > 0.38) c.lerp(new THREE.Color(0x4e5258), (slope - 0.38) * 0.55);
+            if (slope > 0.38) {
+              const slopeRock = (slope - 0.38) * 0.55 * (1 - snowT * 0.9);
+              c.lerp(new THREE.Color(0x4e5258), slopeRock);
+            }
           }
         }
         colors[i * 3] = c.r;
@@ -1533,7 +1547,6 @@
       const peakY = sampleY(KUNLUN.peakX, KUNLUN.peakZ);
       const rockMat = new THREE.MeshStandardMaterial({ color: 0x8a9088, roughness: 0.9, metalness: 0.03 });
       const rockDark = new THREE.MeshStandardMaterial({ color: 0x727870, roughness: 0.92 });
-      const rockSnow = new THREE.MeshStandardMaterial({ color: 0xd8dce4, roughness: 0.82 });
 
       for (let i = 0; i < 10; i++) {
         const ang = (i / 10) * Math.PI * 2 + hash2(i, 960) * 0.4;
@@ -1543,27 +1556,12 @@
         const sy = sampleY(sx, sz);
         const rock = new THREE.Mesh(
           new THREE.DodecahedronGeometry(1.2 + hash2(i, 962) * 1.1, 0),
-          i % 3 === 0 ? rockSnow : (i % 2 ? rockMat : rockDark),
+          i % 2 ? rockMat : rockDark,
         );
         rock.position.set(sx, sy + 0.4, sz);
         rock.rotation.set(hash2(i, 963) * 0.7, ang, hash2(i, 964) * 0.5);
         rock.castShadow = true;
         klGroup.add(rock);
-      }
-
-      const snowMat = new THREE.MeshStandardMaterial({ color: 0xf0f4f8, roughness: 0.78 });
-      for (let i = 0; i < 14; i++) {
-        const ang = (i / 14) * Math.PI * 2 + hash2(i, 950) * 0.5;
-        const sr = 10 + hash2(i, 951) * 12;
-        const sx = KUNLUN.peakX + Math.cos(ang) * sr;
-        const sz = KUNLUN.peakZ + Math.sin(ang) * sr;
-        if (Math.hypot(sx - KUNLUN.cx, sz - KUNLUN.cz) > KUNLUN.weakWaterInner - 2) continue;
-        const sy = sampleY(sx, sz);
-        if (sy < gridY + 22) continue;
-        const patch = new THREE.Mesh(new THREE.SphereGeometry(1.6 + (i % 3) * 0.5, 8, 6), snowMat);
-        patch.scale.y = 0.18 + hash2(i, 952) * 0.1;
-        patch.position.set(sx, sy + 0.2, sz);
-        klGroup.add(patch);
       }
 
       group.add(klGroup);
